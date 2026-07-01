@@ -29,3 +29,5 @@ logs/
 
 # OS
 .DS_Store
+.venv-autoinject/
+.venv-autoinject/

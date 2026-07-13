@@ -34,7 +34,10 @@ def _probe_local_logprob_support(model_name: str) -> bool:
         return _LOGPROB_PROBE_CACHE[model_name]
 
     # Assume SecAlign supports logprobs to avoid expensive double-load of shards
-    if model_name == "facebook/Meta-SecAlign-70B":
+    if model_name in {
+        "facebook/Meta-SecAlign-8B",
+        "facebook/Meta-SecAlign-70B",
+    }:
         _LOGPROB_PROBE_CACHE[model_name] = True
         return True
 

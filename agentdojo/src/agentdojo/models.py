@@ -70,6 +70,8 @@ class ModelsEnum(StrEnum):
     GEMINI_2_5_FLASH = "google/gemini-2.5-flash"
     """Gemini 2.5 Flash"""
     # local model
+    SECALIGN_8B = "facebook/Meta-SecAlign-8B"
+    """SecAlign 8B"""
     SECALIGN_70B = "facebook/Meta-SecAlign-70B"
     """SecAlign 70B"""
     QWEN_3_4B = "Qwen/Qwen3-4B"
@@ -111,6 +113,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.GEMINI_2_5_PRO_PREVIEW_05_06: "google",
     ModelsEnum.GEMINI_2_5_FLASH: "openrouter",
     ModelsEnum.QWEN_3_4B: "local",
+    ModelsEnum.SECALIGN_8B: "local",
     ModelsEnum.SECALIGN_70B: "local",
     ModelsEnum.GEMMA_3_4B_IT: "local",
 }
@@ -149,6 +152,7 @@ MODEL_NAMES = {
     "gemini-2.5-pro-preview-05-06": "AI model developed by Google",
     "google/gemini-2.5-flash": "AI model developed by Google",
     "Qwen/Qwen3-4B": "Qwen3",
+    "facebook/Meta-SecAlign-8B": "AI assistant",
     "facebook/Meta-SecAlign-70B": "AI assistant",
     "google/gemma-3-4b-it": "Gemma",
 }

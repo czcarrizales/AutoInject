@@ -74,7 +74,7 @@ def main() -> None:
 
     config = GRPOConfig(
         output_dir=str(OUTPUT_DIR),
-        model_init_kwargs={"dtype": torch.float16},
+        model_init_kwargs={"dtype": torch.float32},
         per_device_train_batch_size=2,
         num_generations=2,
         generation_batch_size=4,
@@ -84,7 +84,7 @@ def main() -> None:
         learning_rate=1e-4,
         beta=0.0,
         gradient_checkpointing=False,
-        fp16=True,
+        fp16=False,
         logging_steps=1,
         save_strategy="no",
         report_to=[],

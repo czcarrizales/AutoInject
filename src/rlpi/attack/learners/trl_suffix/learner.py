@@ -162,6 +162,7 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
 
         # Early stopping flag
         self.early_stopped: bool = False
+        self.experiment_reporting = None
 
     def _init_model_and_tokenizer(self) -> None:
         """Load policy model and tokenizer."""
@@ -320,7 +321,18 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
             verbose=self.verbose,
             training_session_id=self.training_count,
             grpo_eval_file=grpo_eval_file,
+            on_feedback_model_call=(
+                lambda: self.experiment_reporting.record_feedback_model_call(
+                    "grpo"
+                )
+                if self.experiment_reporting is not None
+                else None
+            ),
         )
+
+    def set_experiment_reporting(self, experiment_reporting) -> None:
+        """Attach passive experiment reporting before evaluation setup."""
+        self.experiment_reporting = experiment_reporting
 
     def _init_output_files(self) -> None:
         """Initialize output file paths if saving enabled."""
@@ -373,6 +385,7 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
             user_name=self.user_name,
             victim_model_name=self.victim_model_name,
             logdir=Path(self.log_dir),
+            experiment_reporting=self.experiment_reporting,
         )
 
         # Store single injection task
@@ -526,6 +539,13 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
             injection_goal=self.injection_task._original_goal,
             gpt_config=self._get_gpt_config(),
             verbose=self.verbose,
+            on_model_call=(
+                lambda: self.experiment_reporting.record_feedback_model_call(
+                    "outer"
+                )
+                if self.experiment_reporting is not None
+                else None
+            ),
         )
 
     def _update_suffix_tracking(self, current_reward: float) -> None:
@@ -808,7 +828,10 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
         self._log_training_stats()
 
     def save_model(
-        self, path: str, queries_used: Optional[int] = None
+        self,
+        path: str,
+        queries_used: Optional[int] = None,
+        experiment_reporting: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Save model and learner state to checkpoint.
 
@@ -863,6 +886,7 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
                 "grpo_learning_rate": self.grpo_learning_rate,
                 "min_experiences_for_training": self.min_experiences_for_training,
             },
+            "experiment_reporting": experiment_reporting or {},
         }
 
         with open(state_path, "w") as f:

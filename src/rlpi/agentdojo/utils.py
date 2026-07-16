@@ -152,8 +152,11 @@ def execute_single_benchmark(
     task_injections: List[str],
     suite: TaskSuite,
     trace_logger,
+    experiment_reporting=None,
 ) -> Tuple[float, float]:
     """Execute a single benchmark task and return numeric utility and security scores."""
+    if experiment_reporting is not None:
+        experiment_reporting.record_pipeline_attempt("outer")
     try:
         utility, security = suite.run_task_with_pipeline(
             pipeline,
@@ -161,12 +164,16 @@ def execute_single_benchmark(
             wrapped_injection_task.task,
             task_injections,
         )
+        if experiment_reporting is not None:
+            experiment_reporting.record_pipeline_completed()
     except (
         yaml.scanner.ScannerError,
         yaml.parser.ParserError,
         yaml.constructor.ConstructorError,
         yaml.YAMLError,
     ) as e:
+        if experiment_reporting is not None:
+            experiment_reporting.record_pipeline_error()
         # Catch YAML parsing errors that occur when generated suffixes break YAML format
         # Return failure scores to allow training to continue
         logger.error(
@@ -175,6 +182,10 @@ def execute_single_benchmark(
             f"Task injections: {task_injections}"
         )
         utility, security = 0.0, 0.0
+    except Exception:
+        if experiment_reporting is not None:
+            experiment_reporting.record_pipeline_error()
+        raise
 
     numeric_utility = convert_to_numeric(utility, "utility")
     numeric_security = convert_to_numeric(security, "security")

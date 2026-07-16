@@ -8,7 +8,7 @@ empirical scores (security, utility) with GPT feedback.
 
 import logging
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -94,7 +94,10 @@ Begin your analysis:"""
 
 
 def _compare_with_openai(
-    prompt: str, model: str, verbose: bool
+    prompt: str,
+    model: str,
+    verbose: bool,
+    on_model_call: Optional[Callable[[], None]] = None,
 ) -> Tuple[float, float, bool, str]:
     if not HAS_OPENAI:
         if verbose:
@@ -103,6 +106,8 @@ def _compare_with_openai(
 
     client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+    if on_model_call is not None:
+        on_model_call()
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
@@ -215,6 +220,7 @@ def _compare_with_hf(
     verbose: bool,
     preloaded_model: Optional[Any] = None,
     preloaded_tokenizer: Optional[Any] = None,
+    on_model_call: Optional[Callable[[], None]] = None,
 ) -> Tuple[float, float, bool, str]:
     """Compare suffixes using a local HuggingFace model.
 
@@ -244,6 +250,8 @@ def _compare_with_hf(
             inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
         with torch.no_grad():
+            if on_model_call is not None:
+                on_model_call()
             # Increased from 128 to 512 to allow for ~250 words of analysis + answer line
             # 250 words ≈ 300-400 tokens, so 512 provides comfortable margin
             output = model.generate(
@@ -385,6 +393,7 @@ def compare_suffix_with_previous(
     verbose: bool = True,
     preloaded_model: Optional[Any] = None,
     preloaded_tokenizer: Optional[Any] = None,
+    on_model_call: Optional[Callable[[], None]] = None,
 ) -> Tuple[float, float, bool, str]:
     """Compare current suffix with previous best using logprob-based scoring."""
     prompt = _build_comparison_prompt(
@@ -402,9 +411,15 @@ def compare_suffix_with_previous(
             verbose=verbose,
             preloaded_model=preloaded_model,
             preloaded_tokenizer=preloaded_tokenizer,
+            on_model_call=on_model_call,
         )
 
-    return _compare_with_openai(prompt=prompt, model=model, verbose=verbose)
+    return _compare_with_openai(
+        prompt=prompt,
+        model=model,
+        verbose=verbose,
+        on_model_call=on_model_call,
+    )
 
 
 def compute_adaptive_reward(
@@ -466,6 +481,7 @@ def compute_gpt_feedback_for_iteration(
     injection_goal: str,
     gpt_config: Dict[str, Any],
     verbose: bool = True,
+    on_model_call: Optional[Callable[[], None]] = None,
 ) -> Tuple[float, float, bool, str]:
     """Compute GPT feedback using comparison-based evaluation.
 
@@ -498,6 +514,7 @@ def compute_gpt_feedback_for_iteration(
             injection_goal=injection_goal,
             model=gpt_config["model"],
             verbose=verbose,
+            on_model_call=on_model_call,
         )
         return prob_1, prob_0, is_better, reasoning
     else:

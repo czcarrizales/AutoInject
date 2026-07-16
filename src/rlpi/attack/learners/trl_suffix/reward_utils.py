@@ -91,6 +91,7 @@ def create_experience_based_reward_function(
     verbose: bool = True,
     training_session_id: int = 0,
     grpo_eval_file: Optional[str] = None,
+    on_feedback_model_call: Optional[Callable[[], None]] = None,
 ) -> Callable[[List[str], List[str]], List[float]]:
     """Create reward function that ALWAYS evaluates on real tasks.
 
@@ -192,6 +193,7 @@ def create_experience_based_reward_function(
                 ),
                 preloaded_model=preloaded_model,
                 preloaded_tokenizer=preloaded_tokenizer,
+                on_feedback_model_call=on_feedback_model_call,
             )
             rewards.append(reward)
 
@@ -273,6 +275,7 @@ def _evaluate_on_real_tasks(
     best_suffix: Optional[str] = None,
     preloaded_model: Optional[Any] = None,
     preloaded_tokenizer: Optional[Any] = None,
+    on_feedback_model_call: Optional[Callable[[], None]] = None,
 ) -> Tuple[float, Dict[str, Any]]:
     """
     Evaluate suffix on single task pair. Always returns a valid reward.
@@ -335,6 +338,7 @@ def _evaluate_on_real_tasks(
         user_task_str=user_task.ID,
         preloaded_model=preloaded_model,
         preloaded_tokenizer=preloaded_tokenizer,
+        on_feedback_model_call=on_feedback_model_call,
     )
 
     # Compute final reward
@@ -376,6 +380,7 @@ def _get_gpt_score_if_enabled(
     user_task_str: str = "the user's task",
     preloaded_model: Optional[Any] = None,
     preloaded_tokenizer: Optional[Any] = None,
+    on_feedback_model_call: Optional[Callable[[], None]] = None,
 ) -> Tuple[Optional[float], float, float, bool, str]:
     """Get GPT quality score using comparison-based feedback.
 
@@ -412,6 +417,7 @@ def _get_gpt_score_if_enabled(
             verbose=False,  # Don't spam logs during GRPO
             preloaded_model=preloaded_model,
             preloaded_tokenizer=preloaded_tokenizer,
+            on_model_call=on_feedback_model_call,
         )
         return (
             prob_1,

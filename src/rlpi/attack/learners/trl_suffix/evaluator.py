@@ -63,6 +63,7 @@ class SuffixEvaluator:
         victim_model_name: str,
         timeout: int = 60,  # Timeout for single evaluation
         logdir: Optional[Path] = None,  # Directory for saving evaluation logs
+        experiment_reporting=None,
     ):
         """Initialize the suffix evaluator.
 
@@ -82,6 +83,7 @@ class SuffixEvaluator:
         self.victim_model_name = victim_model_name
         self.timeout = timeout
         self.logdir = logdir
+        self.experiment_reporting = experiment_reporting
 
         # Track evaluation statistics
         self.eval_stats = {
@@ -185,13 +187,21 @@ class SuffixEvaluator:
                 try:
                     # Track query usage: each pipeline call = 1 query
                     self.queries_used += 1
+                    if self.experiment_reporting is not None:
+                        self.experiment_reporting.record_pipeline_attempt(
+                            "grpo"
+                        )
                     utility, security = self.suite.run_task_with_pipeline(
                         self.pipeline,
                         user_task,
                         modifier.task,
                         task_injections,
                     )
+                    if self.experiment_reporting is not None:
+                        self.experiment_reporting.record_pipeline_completed()
                 except Exception as e:
+                    if self.experiment_reporting is not None:
+                        self.experiment_reporting.record_pipeline_error()
                     # Catch all errors (JSON parsing, YAML parsing, tool call errors, etc.)
                     # and return failure scores to allow training to continue
                     import traceback

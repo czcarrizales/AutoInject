@@ -11,6 +11,10 @@ from agentdojo.logging import Logger, TraceLogger
 from agentdojo.models import ModelsEnum
 from agentdojo.task_suite.load_suites import get_suite
 from agentdojo.task_suite.task_suite import TaskSuite
+from rlpi.agentdojo.experiment_reporting import (
+    ExperimentReporting,
+    log_final_experiment_summary,
+)
 from rlpi.agentdojo.utils import (
     calculate_average_scores,
     execute_single_benchmark,
@@ -47,7 +51,14 @@ def _find_latest_checkpoint(logdir: Path) -> Optional[Path]:
     return None
 
 
-def _save_checkpoint(learner, iteration, queries_used, logdir):
+def _save_checkpoint(
+    learner,
+    iteration,
+    queries_used,
+    logdir,
+    experiment_reporting=None,
+    query_budget=None,
+):
     """Save checkpoint to a single checkpoint file (overwrites previous).
 
     Args:
@@ -62,10 +73,20 @@ def _save_checkpoint(learner, iteration, queries_used, logdir):
         import inspect
 
         sig = inspect.signature(learner.save_model)
+        save_kwargs = {}
         if "queries_used" in sig.parameters:
-            learner.save_model(checkpoint_path, queries_used=queries_used)
-        else:
-            learner.save_model(checkpoint_path)
+            save_kwargs["queries_used"] = queries_used
+        if (
+            "experiment_reporting" in sig.parameters
+            and experiment_reporting is not None
+        ):
+            reporting_state = experiment_reporting.to_dict()
+            if query_budget is not None:
+                reporting_state["budget_overshoot"] = max(
+                    0, queries_used - query_budget
+                )
+            save_kwargs["experiment_reporting"] = reporting_state
+        learner.save_model(checkpoint_path, **save_kwargs)
         logger.info(
             f"Saved checkpoint to {checkpoint_path} (iteration={iteration + 1}, queries_used={queries_used})"
         )
@@ -89,6 +110,7 @@ def run_adaptive_attack(
     defense = cfg.defense
     system_message = cfg.system_message
     learner_type = cfg.learner.type
+    experiment_reporting = ExperimentReporting()
 
     # Get tasks first so we can pass them to setup
     user_tasks_to_run = get_user_tasks(suite, user_tasks)
@@ -104,6 +126,7 @@ def run_adaptive_attack(
         attack=attack,
         suite=suite,
         injection_tasks=list(wrapped_tasks_dict.values()),
+        experiment_reporting=experiment_reporting,
     )
 
     # The suffix and inference learners support exactly one
@@ -154,6 +177,10 @@ def run_adaptive_attack(
                 checkpoint_state = json.load(f)
                 learner_state = checkpoint_state.get("learner_state", {})
                 queries_used = learner_state.get("queries_used")
+                restored_reporting = ExperimentReporting.from_checkpoint(
+                    checkpoint_state
+                )
+                experiment_reporting.restore(restored_reporting.to_dict())
 
             # Get iteration from learner's experience_count
             # Note: experience_count is the number of experiences completed
@@ -185,6 +212,12 @@ def run_adaptive_attack(
                 logger.warning(
                     f"Checkpoint indicates all queries used ({queries_used} >= {query_budget}). "
                     "Nothing to resume."
+                )
+                log_final_experiment_summary(
+                    logger,
+                    experiment_reporting,
+                    query_budget,
+                    queries_used,
                 )
                 return
 
@@ -224,6 +257,7 @@ def run_adaptive_attack(
                 )
 
                 # Run benchmarks for this user task
+                cycle_start = experiment_reporting.counter_snapshot()
                 task_utility_results, task_security_results = _run_benchmarks(
                     cfg=cfg,
                     user_tasks_to_run=[user_task],
@@ -234,6 +268,7 @@ def run_adaptive_attack(
                     logdir=logdir,
                     learner_type=learner_type,
                     iteration=iteration + 1,
+                    experiment_reporting=experiment_reporting,
                 )
 
                 # Update learner with scores for this user task
@@ -265,10 +300,21 @@ def run_adaptive_attack(
                         ):
                             learner.evaluator.reset_queries_used()
 
+                experiment_reporting.record_cycle(
+                    iteration + 1, cycle_start
+                )
+
                 # Save checkpoint periodically (overwrites previous checkpoint)
                 # Save every 10 iterations to balance disk I/O and recovery capability
                 if (iteration + 1) % 10 == 0:
-                    _save_checkpoint(learner, iteration, queries_used, logdir)
+                    _save_checkpoint(
+                        learner,
+                        iteration,
+                        queries_used,
+                        logdir,
+                        experiment_reporting,
+                        query_budget,
+                    )
 
                 if hasattr(learner, "early_stopped") and learner.early_stopped:
                     logger.info(
@@ -281,8 +327,18 @@ def run_adaptive_attack(
             iteration += 1
 
     # Save final checkpoint (same file as periodic checkpoints)
-    _save_checkpoint(learner, iteration, queries_used, logdir)
+    _save_checkpoint(
+        learner,
+        iteration,
+        queries_used,
+        logdir,
+        experiment_reporting,
+        query_budget,
+    )
     logger.info(f"Saved final checkpoint (queries_used={queries_used})")
+    log_final_experiment_summary(
+        logger, experiment_reporting, query_budget, queries_used
+    )
 
 
 def _setup_pipeline_and_components(
@@ -293,6 +349,7 @@ def _setup_pipeline_and_components(
     attack,
     suite,
     injection_tasks: List,
+    experiment_reporting=None,
 ):
     """Set up the pipeline, attacker, and learner components."""
     # Use common utility to set up pipeline and attacker
@@ -322,6 +379,9 @@ def _setup_pipeline_and_components(
         **learner_params,
     )
 
+    if hasattr(learner, "set_experiment_reporting"):
+        learner.set_experiment_reporting(experiment_reporting)
+
     # If learner supports evaluation infrastructure, inject it
     if hasattr(learner, "set_evaluation_infrastructure"):
         learner.set_evaluation_infrastructure(
@@ -345,6 +405,7 @@ def _run_benchmarks(
     logdir,
     learner_type,
     iteration,
+    experiment_reporting=None,
 ) -> Tuple[Dict[Tuple[str, str], float], Dict[Tuple[str, str], float]]:
     """Run benchmarks for all user tasks and injection tasks combinations."""
     suite_utility_results: Dict[Tuple[str, str], float] = {}
@@ -383,6 +444,7 @@ def _run_benchmarks(
                     task_injections,
                     suite,
                     trace_logger,
+                    experiment_reporting=experiment_reporting,
                 )
 
                 suite_utility_results[(user_task.ID, injection_task_id)] = (

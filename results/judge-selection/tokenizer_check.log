@@ -1,0 +1,208 @@
+
+======================================================================
+meta-llama/Llama-3.1-8B-Instruct
+======================================================================
+Access: OK
+Tokenizer: PreTrainedTokenizerFast
+Vocabulary size: 128256
+
+Text:   '0'
+IDs:    [15]
+Tokens: ['0']
+
+Text:   '1'
+IDs:    [16]
+Tokens: ['1']
+
+Text:   ' 0'
+IDs:    [220, 15]
+Tokens: ['Ġ', '0']
+
+Text:   ' 1'
+IDs:    [220, 16]
+Tokens: ['Ġ', '1']
+
+Text:   '\n0'
+IDs:    [198, 15]
+Tokens: ['Ċ', '0']
+
+Text:   '\n1'
+IDs:    [198, 16]
+Tokens: ['Ċ', '1']
+
+Text:   'Answer: 0'
+IDs:    [16533, 25, 220, 15]
+Tokens: ['Answer', ':', 'Ġ', '0']
+
+Text:   'Answer: 1'
+IDs:    [16533, 25, 220, 16]
+Tokens: ['Answer', ':', 'Ġ', '1']
+
+Text:   '\nAnswer: 0'
+IDs:    [198, 16533, 25, 220, 15]
+Tokens: ['Ċ', 'Answer', ':', 'Ġ', '0']
+
+Text:   '\nAnswer: 1'
+IDs:    [198, 16533, 25, 220, 16]
+Tokens: ['Ċ', 'Answer', ':', 'Ġ', '1']
+
+Context: 'Answer:'
+  Ending '0'
+    Last IDs:    [16533, 25, 15]
+    Last tokens: ['Answer', ':', '0']
+  Ending '1'
+    Last IDs:    [16533, 25, 16]
+    Last tokens: ['Answer', ':', '1']
+  Ending ' 0'
+    Last IDs:    [16533, 25, 220, 15]
+    Last tokens: ['Answer', ':', 'Ġ', '0']
+  Ending ' 1'
+    Last IDs:    [16533, 25, 220, 16]
+    Last tokens: ['Answer', ':', 'Ġ', '1']
+
+Context: 'Answer: '
+  Ending '0'
+    Last IDs:    [16533, 25, 220, 15]
+    Last tokens: ['Answer', ':', 'Ġ', '0']
+  Ending '1'
+    Last IDs:    [16533, 25, 220, 16]
+    Last tokens: ['Answer', ':', 'Ġ', '1']
+  Ending ' 0'
+    Last IDs:    [16533, 25, 220, 220, 15]
+    Last tokens: ['Answer', ':', 'Ġ', 'Ġ', '0']
+  Ending ' 1'
+    Last IDs:    [16533, 25, 220, 220, 16]
+    Last tokens: ['Answer', ':', 'Ġ', 'Ġ', '1']
+
+Context: 'Comparison complete.\nAnswer:'
+  Ending '0'
+    Last IDs:    [34587, 4686, 627, 16533, 25, 15]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', '0']
+  Ending '1'
+    Last IDs:    [34587, 4686, 627, 16533, 25, 16]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', '1']
+  Ending ' 0'
+    Last IDs:    [34587, 4686, 627, 16533, 25, 220, 15]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', '0']
+  Ending ' 1'
+    Last IDs:    [34587, 4686, 627, 16533, 25, 220, 16]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', '1']
+
+Context: 'Comparison complete.\nAnswer: '
+  Ending '0'
+    Last IDs:    [34587, 4686, 627, 16533, 25, 220, 15]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', '0']
+  Ending '1'
+    Last IDs:    [34587, 4686, 627, 16533, 25, 220, 16]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', '1']
+  Ending ' 0'
+    Last IDs:    [34587, 4686, 627, 16533, 25, 220, 220, 15]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', 'Ġ', '0']
+  Ending ' 1'
+    Last IDs:    [34587, 4686, 627, 16533, 25, 220, 220, 16]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', 'Ġ', '1']
+
+======================================================================
+mistralai/Mistral-Nemo-Instruct-2407
+======================================================================
+Access: OK
+Tokenizer: PreTrainedTokenizerFast
+Vocabulary size: 131072
+
+Text:   '0'
+IDs:    [1048]
+Tokens: ['0']
+
+Text:   '1'
+IDs:    [1049]
+Tokens: ['1']
+
+Text:   ' 0'
+IDs:    [1032, 1048]
+Tokens: ['Ġ', '0']
+
+Text:   ' 1'
+IDs:    [1032, 1049]
+Tokens: ['Ġ', '1']
+
+Text:   '\n0'
+IDs:    [1010, 1048]
+Tokens: ['Ċ', '0']
+
+Text:   '\n1'
+IDs:    [1010, 1049]
+Tokens: ['Ċ', '1']
+
+Text:   'Answer: 0'
+IDs:    [31106, 1058, 1032, 1048]
+Tokens: ['Answer', ':', 'Ġ', '0']
+
+Text:   'Answer: 1'
+IDs:    [31106, 1058, 1032, 1049]
+Tokens: ['Answer', ':', 'Ġ', '1']
+
+Text:   '\nAnswer: 0'
+IDs:    [1010, 31106, 1058, 1032, 1048]
+Tokens: ['Ċ', 'Answer', ':', 'Ġ', '0']
+
+Text:   '\nAnswer: 1'
+IDs:    [1010, 31106, 1058, 1032, 1049]
+Tokens: ['Ċ', 'Answer', ':', 'Ġ', '1']
+
+Context: 'Answer:'
+  Ending '0'
+    Last IDs:    [31106, 1058, 1048]
+    Last tokens: ['Answer', ':', '0']
+  Ending '1'
+    Last IDs:    [31106, 1058, 1049]
+    Last tokens: ['Answer', ':', '1']
+  Ending ' 0'
+    Last IDs:    [31106, 1058, 1032, 1048]
+    Last tokens: ['Answer', ':', 'Ġ', '0']
+  Ending ' 1'
+    Last IDs:    [31106, 1058, 1032, 1049]
+    Last tokens: ['Answer', ':', 'Ġ', '1']
+
+Context: 'Answer: '
+  Ending '0'
+    Last IDs:    [31106, 1058, 1032, 1048]
+    Last tokens: ['Answer', ':', 'Ġ', '0']
+  Ending '1'
+    Last IDs:    [31106, 1058, 1032, 1049]
+    Last tokens: ['Answer', ':', 'Ġ', '1']
+  Ending ' 0'
+    Last IDs:    [31106, 1058, 1032, 1032, 1048]
+    Last tokens: ['Answer', ':', 'Ġ', 'Ġ', '0']
+  Ending ' 1'
+    Last IDs:    [31106, 1058, 1032, 1032, 1049]
+    Last tokens: ['Answer', ':', 'Ġ', 'Ġ', '1']
+
+Context: 'Comparison complete.\nAnswer:'
+  Ending '0'
+    Last IDs:    [87051, 7662, 1626, 31106, 1058, 1048]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', '0']
+  Ending '1'
+    Last IDs:    [87051, 7662, 1626, 31106, 1058, 1049]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', '1']
+  Ending ' 0'
+    Last IDs:    [87051, 7662, 1626, 31106, 1058, 1032, 1048]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', '0']
+  Ending ' 1'
+    Last IDs:    [87051, 7662, 1626, 31106, 1058, 1032, 1049]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', '1']
+
+Context: 'Comparison complete.\nAnswer: '
+  Ending '0'
+    Last IDs:    [87051, 7662, 1626, 31106, 1058, 1032, 1048]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', '0']
+  Ending '1'
+    Last IDs:    [87051, 7662, 1626, 31106, 1058, 1032, 1049]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', '1']
+  Ending ' 0'
+    Last IDs:    [87051, 7662, 1626, 31106, 1058, 1032, 1032, 1048]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', 'Ġ', '0']
+  Ending ' 1'
+    Last IDs:    [87051, 7662, 1626, 31106, 1058, 1032, 1032, 1049]
+    Last tokens: ['Comparison', 'Ġcomplete', '.Ċ', 'Answer', ':', 'Ġ', 'Ġ', '1']
+
+Saved structured results to: results/judge-selection/tokenizer_check.json

@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: autoinject-baseline
+spec:
+  restartPolicy: Never
+  containers:
+  - name: autoinject
+    image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+    command: ["bash", "-lc", "sleep infinity"]
+    env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: hf-token
+          key: HF_TOKEN
+    - name: HUGGING_FACE_HUB_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: hf-token
+          key: HF_TOKEN
+    - name: HF_HOME
+      value: /workspace/hf-cache
+    - name: TRANSFORMERS_CACHE
+      value: /workspace/hf-cache
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        ephemeral-storage: "50Gi"
+      limits:
+        cpu: "4"
+        memory: "32Gi"
+        ephemeral-storage: "50Gi"
+        nvidia.com/gpu: 1
+    volumeMounts:
+    - name: workspace
+      mountPath: /workspace
+  volumes:
+  - name: workspace
+    emptyDir: {}

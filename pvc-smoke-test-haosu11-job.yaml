@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pvc-smoke-test-haosu11
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      restartPolicy: Never
+
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - k8s-haosu-11.sdsc.optiputer.net
+
+      containers:
+      - name: pvc-test
+        image: ubuntu:22.04
+        command: ["bash", "-lc"]
+        args:
+          - |
+            set -e
+            echo "=== PINNED PVC MOUNT TEST ON HAOSU-11 ==="
+            hostname
+            date
+
+            echo "hello from pinned pvc-smoke-test-haosu11" > /workspace/pvc-smoke-test-haosu11.txt
+            cat /workspace/pvc-smoke-test-haosu11.txt
+
+            echo
+            echo "=== PVC SPACE ==="
+            df -h /workspace
+
+            echo
+            echo "=== TOP LEVEL FILES ==="
+            ls -lah /workspace
+
+            echo
+            echo "=== TOP LEVEL SIZE ==="
+            du -sh /workspace/* 2>/dev/null || true
+
+            echo
+            echo "Pinned PVC smoke test completed."
+        resources:
+          requests:
+            cpu: "1"
+            memory: "1Gi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace

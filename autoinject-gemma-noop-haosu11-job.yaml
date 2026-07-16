@@ -1,0 +1,152 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-gemma-noop-haosu11
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 21600
+  template:
+    spec:
+      restartPolicy: Never
+
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - k8s-haosu-11.sdsc.optiputer.net
+
+      containers:
+      - name: autoinject
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        command: ["bash", "-lc"]
+        args:
+          - |
+            set -e
+
+            echo "=== GPU / ENV CHECK ==="
+            nvidia-smi || true
+
+            python - <<'PY'
+            import torch, os, sys
+            print("container python:", sys.version)
+            print("container torch:", torch.__version__)
+            print("cuda available:", torch.cuda.is_available())
+            print("gpu:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)
+            print("HF token visible:", bool(os.environ.get("HF_TOKEN")))
+            PY
+
+            echo "=== SETUP WORKSPACE ==="
+            cd /workspace
+            mkdir -p hf-cache pip-cache results notes
+
+            echo "=== INSTALL SYSTEM TOOLS IF MISSING ==="
+            if ! command -v git >/dev/null 2>&1; then
+              apt-get update
+              apt-get install -y git
+            fi
+
+            echo "=== CLONE / UPDATE AUTOINJECT ==="
+            if [ ! -d AutoInject ]; then
+              git clone https://github.com/czcarrizales/AutoInject.git
+            fi
+
+            cd AutoInject
+            git fetch origin
+            git checkout baseline-logging
+            git pull origin baseline-logging
+
+            echo "=== CLEAN PARTIAL OLD VENV ==="
+            rm -rf .venv-autoinject
+
+            echo "=== CREATE PYTHON VENV WITH SYSTEM SITE PACKAGES ==="
+            python -m venv --system-site-packages .venv-autoinject
+            source .venv-autoinject/bin/activate
+
+            echo "=== CHECK TORCH INSIDE VENV ==="
+            python - <<'PY'
+            import torch, sys
+            print("venv python:", sys.version)
+            print("venv torch:", torch.__version__)
+            print("venv cuda available:", torch.cuda.is_available())
+            print("venv gpu:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)
+            PY
+
+            echo "=== INSTALL PYTHON DEPENDENCIES ==="
+            pip install -U pip
+
+            echo "=== INSTALL LOCAL AGENTDOJO ==="
+            pip install -e ./agentdojo
+
+            echo "=== INSTALL AUTOINJECT ==="
+            pip install -e .
+
+            echo "=== ENSURE HF / TRANSFORMERS PACKAGES ==="
+            pip install 'huggingface_hub>=0.34.0,<1.0' transformers accelerate
+
+            echo "=== PVC SPACE BEFORE RUN ==="
+            df -h /workspace
+            du -sh /workspace/* 2>/dev/null || true
+
+            echo "=== RUN BASELINE: GEMMA NOOP BANKING U0 I0 ==="
+            HYDRA_FULL_ERROR=1 python -m rlpi.agentdojo.adaptive_agentdojo \
+              exp_ident=baseline_gemma_noop_banking_u0_i0_haosu11 \
+              model=google/gemma-3-4b-it \
+              suite=banking \
+              query_budget=1 \
+              'user_tasks=[user_task_0]' \
+              'injection_tasks=[injection_task_0]' \
+              learner=noop
+
+            echo "=== PVC SPACE AFTER RUN ==="
+            df -h /workspace
+            du -sh /workspace/* 2>/dev/null || true
+
+            echo "=== OUTPUT FILES ==="
+            find outputs -maxdepth 5 -type f | sort | tail -80
+
+        env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+
+        - name: HF_HOME
+          value: /workspace/hf-cache
+
+        - name: TRANSFORMERS_CACHE
+          value: /workspace/hf-cache
+
+        - name: PIP_CACHE_DIR
+          value: /workspace/pip-cache
+
+        - name: PYTHONUNBUFFERED
+          value: "1"
+
+        resources:
+          requests:
+            cpu: "4"
+            memory: "32Gi"
+          limits:
+            cpu: "4"
+            memory: "32Gi"
+            nvidia.com/gpu: 1
+
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace

@@ -1,0 +1,834 @@
+{
+  "meta-llama/Llama-3.1-8B-Instruct": {
+    "access": true,
+    "samples": {
+      "'0'": {
+        "token_ids": [
+          15
+        ],
+        "tokens": [
+          "0"
+        ],
+        "token_count": 1
+      },
+      "'1'": {
+        "token_ids": [
+          16
+        ],
+        "tokens": [
+          "1"
+        ],
+        "token_count": 1
+      },
+      "' 0'": {
+        "token_ids": [
+          220,
+          15
+        ],
+        "tokens": [
+          "\u0120",
+          "0"
+        ],
+        "token_count": 2
+      },
+      "' 1'": {
+        "token_ids": [
+          220,
+          16
+        ],
+        "tokens": [
+          "\u0120",
+          "1"
+        ],
+        "token_count": 2
+      },
+      "'\\n0'": {
+        "token_ids": [
+          198,
+          15
+        ],
+        "tokens": [
+          "\u010a",
+          "0"
+        ],
+        "token_count": 2
+      },
+      "'\\n1'": {
+        "token_ids": [
+          198,
+          16
+        ],
+        "tokens": [
+          "\u010a",
+          "1"
+        ],
+        "token_count": 2
+      },
+      "'Answer: 0'": {
+        "token_ids": [
+          16533,
+          25,
+          220,
+          15
+        ],
+        "tokens": [
+          "Answer",
+          ":",
+          "\u0120",
+          "0"
+        ],
+        "token_count": 4
+      },
+      "'Answer: 1'": {
+        "token_ids": [
+          16533,
+          25,
+          220,
+          16
+        ],
+        "tokens": [
+          "Answer",
+          ":",
+          "\u0120",
+          "1"
+        ],
+        "token_count": 4
+      },
+      "'\\nAnswer: 0'": {
+        "token_ids": [
+          198,
+          16533,
+          25,
+          220,
+          15
+        ],
+        "tokens": [
+          "\u010a",
+          "Answer",
+          ":",
+          "\u0120",
+          "0"
+        ],
+        "token_count": 5
+      },
+      "'\\nAnswer: 1'": {
+        "token_ids": [
+          198,
+          16533,
+          25,
+          220,
+          16
+        ],
+        "tokens": [
+          "\u010a",
+          "Answer",
+          ":",
+          "\u0120",
+          "1"
+        ],
+        "token_count": 5
+      }
+    },
+    "context_endings": {
+      "'Answer:'": {
+        "'0'": {
+          "last_token_ids": [
+            16533,
+            25,
+            15
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "0"
+          ]
+        },
+        "'1'": {
+          "last_token_ids": [
+            16533,
+            25,
+            16
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "1"
+          ]
+        },
+        "' 0'": {
+          "last_token_ids": [
+            16533,
+            25,
+            220,
+            15
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "0"
+          ]
+        },
+        "' 1'": {
+          "last_token_ids": [
+            16533,
+            25,
+            220,
+            16
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "1"
+          ]
+        }
+      },
+      "'Answer: '": {
+        "'0'": {
+          "last_token_ids": [
+            16533,
+            25,
+            220,
+            15
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "0"
+          ]
+        },
+        "'1'": {
+          "last_token_ids": [
+            16533,
+            25,
+            220,
+            16
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "1"
+          ]
+        },
+        "' 0'": {
+          "last_token_ids": [
+            16533,
+            25,
+            220,
+            220,
+            15
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "\u0120",
+            "0"
+          ]
+        },
+        "' 1'": {
+          "last_token_ids": [
+            16533,
+            25,
+            220,
+            220,
+            16
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "\u0120",
+            "1"
+          ]
+        }
+      },
+      "'Comparison complete.\\nAnswer:'": {
+        "'0'": {
+          "last_token_ids": [
+            34587,
+            4686,
+            627,
+            16533,
+            25,
+            15
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "0"
+          ]
+        },
+        "'1'": {
+          "last_token_ids": [
+            34587,
+            4686,
+            627,
+            16533,
+            25,
+            16
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "1"
+          ]
+        },
+        "' 0'": {
+          "last_token_ids": [
+            34587,
+            4686,
+            627,
+            16533,
+            25,
+            220,
+            15
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "0"
+          ]
+        },
+        "' 1'": {
+          "last_token_ids": [
+            34587,
+            4686,
+            627,
+            16533,
+            25,
+            220,
+            16
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "1"
+          ]
+        }
+      },
+      "'Comparison complete.\\nAnswer: '": {
+        "'0'": {
+          "last_token_ids": [
+            34587,
+            4686,
+            627,
+            16533,
+            25,
+            220,
+            15
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "0"
+          ]
+        },
+        "'1'": {
+          "last_token_ids": [
+            34587,
+            4686,
+            627,
+            16533,
+            25,
+            220,
+            16
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "1"
+          ]
+        },
+        "' 0'": {
+          "last_token_ids": [
+            34587,
+            4686,
+            627,
+            16533,
+            25,
+            220,
+            220,
+            15
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "\u0120",
+            "0"
+          ]
+        },
+        "' 1'": {
+          "last_token_ids": [
+            34587,
+            4686,
+            627,
+            16533,
+            25,
+            220,
+            220,
+            16
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "\u0120",
+            "1"
+          ]
+        }
+      }
+    },
+    "config_path": "/home/chazz/.cache/huggingface/hub/models--meta-llama--Llama-3.1-8B-Instruct/snapshots/0e9e39f249a16976918f6564b8830bc894c89659/config.json",
+    "tokenizer_class": "PreTrainedTokenizerFast",
+    "vocab_size": 128256
+  },
+  "mistralai/Mistral-Nemo-Instruct-2407": {
+    "access": true,
+    "samples": {
+      "'0'": {
+        "token_ids": [
+          1048
+        ],
+        "tokens": [
+          "0"
+        ],
+        "token_count": 1
+      },
+      "'1'": {
+        "token_ids": [
+          1049
+        ],
+        "tokens": [
+          "1"
+        ],
+        "token_count": 1
+      },
+      "' 0'": {
+        "token_ids": [
+          1032,
+          1048
+        ],
+        "tokens": [
+          "\u0120",
+          "0"
+        ],
+        "token_count": 2
+      },
+      "' 1'": {
+        "token_ids": [
+          1032,
+          1049
+        ],
+        "tokens": [
+          "\u0120",
+          "1"
+        ],
+        "token_count": 2
+      },
+      "'\\n0'": {
+        "token_ids": [
+          1010,
+          1048
+        ],
+        "tokens": [
+          "\u010a",
+          "0"
+        ],
+        "token_count": 2
+      },
+      "'\\n1'": {
+        "token_ids": [
+          1010,
+          1049
+        ],
+        "tokens": [
+          "\u010a",
+          "1"
+        ],
+        "token_count": 2
+      },
+      "'Answer: 0'": {
+        "token_ids": [
+          31106,
+          1058,
+          1032,
+          1048
+        ],
+        "tokens": [
+          "Answer",
+          ":",
+          "\u0120",
+          "0"
+        ],
+        "token_count": 4
+      },
+      "'Answer: 1'": {
+        "token_ids": [
+          31106,
+          1058,
+          1032,
+          1049
+        ],
+        "tokens": [
+          "Answer",
+          ":",
+          "\u0120",
+          "1"
+        ],
+        "token_count": 4
+      },
+      "'\\nAnswer: 0'": {
+        "token_ids": [
+          1010,
+          31106,
+          1058,
+          1032,
+          1048
+        ],
+        "tokens": [
+          "\u010a",
+          "Answer",
+          ":",
+          "\u0120",
+          "0"
+        ],
+        "token_count": 5
+      },
+      "'\\nAnswer: 1'": {
+        "token_ids": [
+          1010,
+          31106,
+          1058,
+          1032,
+          1049
+        ],
+        "tokens": [
+          "\u010a",
+          "Answer",
+          ":",
+          "\u0120",
+          "1"
+        ],
+        "token_count": 5
+      }
+    },
+    "context_endings": {
+      "'Answer:'": {
+        "'0'": {
+          "last_token_ids": [
+            31106,
+            1058,
+            1048
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "0"
+          ]
+        },
+        "'1'": {
+          "last_token_ids": [
+            31106,
+            1058,
+            1049
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "1"
+          ]
+        },
+        "' 0'": {
+          "last_token_ids": [
+            31106,
+            1058,
+            1032,
+            1048
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "0"
+          ]
+        },
+        "' 1'": {
+          "last_token_ids": [
+            31106,
+            1058,
+            1032,
+            1049
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "1"
+          ]
+        }
+      },
+      "'Answer: '": {
+        "'0'": {
+          "last_token_ids": [
+            31106,
+            1058,
+            1032,
+            1048
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "0"
+          ]
+        },
+        "'1'": {
+          "last_token_ids": [
+            31106,
+            1058,
+            1032,
+            1049
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "1"
+          ]
+        },
+        "' 0'": {
+          "last_token_ids": [
+            31106,
+            1058,
+            1032,
+            1032,
+            1048
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "\u0120",
+            "0"
+          ]
+        },
+        "' 1'": {
+          "last_token_ids": [
+            31106,
+            1058,
+            1032,
+            1032,
+            1049
+          ],
+          "last_tokens": [
+            "Answer",
+            ":",
+            "\u0120",
+            "\u0120",
+            "1"
+          ]
+        }
+      },
+      "'Comparison complete.\\nAnswer:'": {
+        "'0'": {
+          "last_token_ids": [
+            87051,
+            7662,
+            1626,
+            31106,
+            1058,
+            1048
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "0"
+          ]
+        },
+        "'1'": {
+          "last_token_ids": [
+            87051,
+            7662,
+            1626,
+            31106,
+            1058,
+            1049
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "1"
+          ]
+        },
+        "' 0'": {
+          "last_token_ids": [
+            87051,
+            7662,
+            1626,
+            31106,
+            1058,
+            1032,
+            1048
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "0"
+          ]
+        },
+        "' 1'": {
+          "last_token_ids": [
+            87051,
+            7662,
+            1626,
+            31106,
+            1058,
+            1032,
+            1049
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "1"
+          ]
+        }
+      },
+      "'Comparison complete.\\nAnswer: '": {
+        "'0'": {
+          "last_token_ids": [
+            87051,
+            7662,
+            1626,
+            31106,
+            1058,
+            1032,
+            1048
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "0"
+          ]
+        },
+        "'1'": {
+          "last_token_ids": [
+            87051,
+            7662,
+            1626,
+            31106,
+            1058,
+            1032,
+            1049
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "1"
+          ]
+        },
+        "' 0'": {
+          "last_token_ids": [
+            87051,
+            7662,
+            1626,
+            31106,
+            1058,
+            1032,
+            1032,
+            1048
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "\u0120",
+            "0"
+          ]
+        },
+        "' 1'": {
+          "last_token_ids": [
+            87051,
+            7662,
+            1626,
+            31106,
+            1058,
+            1032,
+            1032,
+            1049
+          ],
+          "last_tokens": [
+            "Comparison",
+            "\u0120complete",
+            ".\u010a",
+            "Answer",
+            ":",
+            "\u0120",
+            "\u0120",
+            "1"
+          ]
+        }
+      }
+    },
+    "config_path": "/home/chazz/.cache/huggingface/hub/models--mistralai--Mistral-Nemo-Instruct-2407/snapshots/04d8a90549d23fc6bd7f642064003592df51e9b3/config.json",
+    "tokenizer_class": "PreTrainedTokenizerFast",
+    "vocab_size": 131072
+  }
+}

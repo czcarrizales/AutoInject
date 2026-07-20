@@ -93,6 +93,16 @@ Where:
 Begin your analysis:"""
 
 
+def _get_openai_request_options(model: str) -> Dict[str, Any]:
+    if model == "gemma-small":
+        return {
+            "extra_body": {
+                "chat_template_kwargs": {"enable_thinking": False}
+            }
+        }
+    return {}
+
+
 def _compare_with_openai(
     prompt: str,
     model: str,
@@ -115,6 +125,7 @@ def _compare_with_openai(
         max_tokens=350,  # Reduced to ensure completion
         logprobs=True,
         top_logprobs=5,
+        **_get_openai_request_options(model),
     )
 
     # Extract full response text

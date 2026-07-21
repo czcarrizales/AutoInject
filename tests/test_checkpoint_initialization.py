@@ -1,11 +1,25 @@
+import builtins
+import io
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import torch
 from omegaconf import OmegaConf
+from torch import nn
 
 from rlpi.agentdojo import adaptive_agentdojo
+from rlpi.attack.learners.trl_suffix.learner import TRLSuffixLearner
+
+
+class TinyPolicy(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(2, 2)
+        self.config = SimpleNamespace(model_type="tiny-policy")
 
 
 class CheckpointInitializationValidationTests(unittest.TestCase):
@@ -132,6 +146,389 @@ class CheckpointInitializationValidationTests(unittest.TestCase):
         get_attack_learner.assert_not_called()
         evaluate_victim.assert_not_called()
         run_adaptive_attack.assert_not_called()
+
+
+class PolicyWeightsOnlyCheckpointTests(unittest.TestCase):
+    def _learner(self):
+        learner = TRLSuffixLearner.__new__(TRLSuffixLearner)
+        learner.attack_model_name = "tiny-attack-model"
+        learner.policy = TinyPolicy()
+        learner.best_suffix = "keep-best-suffix"
+        learner.best_reward = 0.75
+        learner.training_count = 4
+        learner.experience_count = 9
+        learner.early_stopped = True
+        learner.current_prompt = "keep-current-prompt"
+        learner.current_suffix = "keep-current-suffix"
+        learner.current_user_task = object()
+        learner.injection_task = object()
+        learner.evaluator = object()
+        learner.experiment_reporting = object()
+        learner._checkpoint_queries_used = 17
+        learner.max_suffix_length = 20
+        learner.temperature = 0.7
+        learner.top_p = 0.9
+        learner.grpo_num_generations = 2
+        learner.grpo_num_iterations = 1
+        learner.grpo_learning_rate = 1e-7
+        learner.min_experiences_for_training = 2
+        return learner
+
+    def _checkpoint(self, source_policy=None):
+        source_policy = source_policy or TinyPolicy()
+        return {
+            "policy_checkpoint_format_version": "1.0",
+            "policy_state_dict": {
+                key: tensor.detach().clone()
+                for key, tensor in source_policy.state_dict().items()
+            },
+            "model_config": {
+                "attack_model_name": "tiny-attack-model",
+                "policy_class": (
+                    f"{TinyPolicy.__module__}.{TinyPolicy.__qualname__}"
+                ),
+                "model_type": "tiny-policy",
+                "dtype": "torch.float32",
+            },
+        }
+
+    def _save_checkpoint(self, directory, checkpoint):
+        path = Path(directory) / "checkpoint.pt"
+        torch.save(checkpoint, path)
+        return path
+
+    def _tensor_snapshot(self, learner):
+        return {
+            key: tensor.detach().clone()
+            for key, tensor in learner.policy.state_dict().items()
+        }
+
+    def _assert_tensors_unchanged(self, learner, snapshot):
+        current = learner.policy.state_dict()
+        self.assertEqual(current.keys(), snapshot.keys())
+        for key, original in snapshot.items():
+            current_bytes = (
+                current[key]
+                .detach()
+                .cpu()
+                .contiguous()
+                .view(torch.uint8)
+                .numpy()
+                .tobytes()
+            )
+            original_bytes = (
+                original.detach()
+                .cpu()
+                .contiguous()
+                .view(torch.uint8)
+                .numpy()
+                .tobytes()
+            )
+            self.assertEqual(current_bytes, original_bytes, key)
+
+    def _assert_load_fails_transactionally(self, checkpoint, message):
+        learner = self._learner()
+        snapshot = self._tensor_snapshot(learner)
+        with TemporaryDirectory() as directory:
+            path = self._save_checkpoint(directory, checkpoint)
+            with patch.object(
+                learner.policy,
+                "load_state_dict",
+                wraps=learner.policy.load_state_dict,
+            ) as load_state_dict:
+                with self.assertRaisesRegex(ValueError, message):
+                    learner.load_policy_weights_only(path)
+            load_state_dict.assert_not_called()
+        self._assert_tensors_unchanged(learner, snapshot)
+
+    def test_valid_tiny_model_checkpoint_loads_policy_only(self):
+        learner = self._learner()
+        source_policy = TinyPolicy()
+        with torch.no_grad():
+            for tensor in source_policy.parameters():
+                tensor.fill_(3.0)
+
+        unchanged = {
+            "best_suffix": learner.best_suffix,
+            "best_reward": learner.best_reward,
+            "training_count": learner.training_count,
+            "experience_count": learner.experience_count,
+            "early_stopped": learner.early_stopped,
+            "current_prompt": learner.current_prompt,
+            "current_suffix": learner.current_suffix,
+            "current_user_task": learner.current_user_task,
+            "injection_task": learner.injection_task,
+            "evaluator": learner.evaluator,
+            "experiment_reporting": learner.experiment_reporting,
+            "_checkpoint_queries_used": learner._checkpoint_queries_used,
+        }
+
+        with TemporaryDirectory() as directory:
+            path = self._save_checkpoint(
+                directory, self._checkpoint(source_policy)
+            )
+            sidecar = Path(directory) / "checkpoint_state.json"
+            sidecar.write_text("not valid json")
+
+            read_paths = []
+            original_builtin_open = builtins.open
+            original_path_open = Path.open
+            original_io_open = io.open
+
+            def record_read(file, mode):
+                if "r" not in mode or isinstance(file, int):
+                    return
+                file_path = Path(file)
+                if file_path.suffix == ".json":
+                    raise AssertionError("policy loader opened JSON sidecar")
+                if file_path != path:
+                    raise AssertionError(
+                        f"policy loader read unexpected path: {file_path}"
+                    )
+                read_paths.append(file_path)
+
+            def guarded_builtin_open(file, mode="r", *args, **kwargs):
+                record_read(file, mode)
+                return original_builtin_open(file, mode, *args, **kwargs)
+
+            def guarded_path_open(path_obj, mode="r", *args, **kwargs):
+                record_read(path_obj, mode)
+                return original_path_open(path_obj, mode, *args, **kwargs)
+
+            def guarded_io_open(file, mode="r", *args, **kwargs):
+                record_read(file, mode)
+                return original_io_open(file, mode, *args, **kwargs)
+
+            with (
+                patch("builtins.open", side_effect=guarded_builtin_open),
+                patch.object(
+                    Path,
+                    "open",
+                    autospec=True,
+                    side_effect=guarded_path_open,
+                ),
+                patch("io.open", side_effect=guarded_io_open),
+                patch.object(
+                    json,
+                    "load",
+                    side_effect=AssertionError(
+                        "policy loader called json.load"
+                    ),
+                ),
+                patch(
+                    "rlpi.attack.learners.trl_suffix.learner.torch.load",
+                    wraps=torch.load,
+                ) as torch_load,
+                patch.object(
+                    learner,
+                    "load_model",
+                    side_effect=AssertionError("instance load_model called"),
+                ) as instance_load_model,
+                patch.object(
+                    TRLSuffixLearner,
+                    "load_model",
+                    side_effect=AssertionError("class load_model called"),
+                ) as class_load_model,
+                patch.object(
+                    learner.policy,
+                    "load_state_dict",
+                    wraps=learner.policy.load_state_dict,
+                ) as load_state_dict,
+            ):
+                learner.load_policy_weights_only(path)
+
+        for key, source_tensor in source_policy.state_dict().items():
+            self.assertTrue(
+                torch.equal(learner.policy.state_dict()[key], source_tensor),
+                key,
+            )
+        torch_load.assert_called_once_with(
+            path, map_location="cpu", weights_only=True
+        )
+        load_state_dict.assert_called_once()
+        self.assertTrue(load_state_dict.call_args.kwargs["strict"])
+        instance_load_model.assert_not_called()
+        class_load_model.assert_not_called()
+        self.assertTrue(read_paths)
+        self.assertEqual(set(read_paths), {path})
+        self.assertEqual(learner.best_suffix, unchanged["best_suffix"])
+        self.assertEqual(learner.best_reward, unchanged["best_reward"])
+        self.assertEqual(learner.training_count, unchanged["training_count"])
+        self.assertEqual(
+            learner.experience_count, unchanged["experience_count"]
+        )
+        self.assertEqual(learner.early_stopped, unchanged["early_stopped"])
+        self.assertEqual(learner.current_prompt, unchanged["current_prompt"])
+        self.assertEqual(learner.current_suffix, unchanged["current_suffix"])
+        for field in (
+            "current_user_task",
+            "injection_task",
+            "evaluator",
+            "experiment_reporting",
+        ):
+            self.assertIs(getattr(learner, field), unchanged[field])
+        self.assertEqual(
+            learner._checkpoint_queries_used,
+            unchanged["_checkpoint_queries_used"],
+        )
+        self.assertEqual(
+            learner.policy_initialization_provenance["source_checkpoint_path"],
+            str(path),
+        )
+
+    def test_save_model_includes_policy_compatibility_metadata(self):
+        learner = self._learner()
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "checkpoint.pt"
+            learner.save_model(str(path))
+            checkpoint = torch.load(
+                path, map_location="cpu", weights_only=True
+            )
+
+        self.assertEqual(
+            checkpoint["policy_checkpoint_format_version"], "1.0"
+        )
+        self.assertEqual(
+            checkpoint["model_config"],
+            {
+                "attack_model_name": "tiny-attack-model",
+                "policy_class": (
+                    f"{TinyPolicy.__module__}.{TinyPolicy.__qualname__}"
+                ),
+                "model_type": "tiny-policy",
+                "dtype": "torch.float32",
+            },
+        )
+
+    def test_missing_policy_state_dict_fails_transactionally(self):
+        checkpoint = self._checkpoint()
+        del checkpoint["policy_state_dict"]
+        self._assert_load_fails_transactionally(
+            checkpoint, "policy_state_dict.*required"
+        )
+
+    def test_wrong_policy_state_dict_type_fails_transactionally(self):
+        checkpoint = self._checkpoint()
+        checkpoint["policy_state_dict"] = []
+        self._assert_load_fails_transactionally(
+            checkpoint, "policy_state_dict.*mapping"
+        )
+
+    def test_non_mapping_checkpoint_fails_transactionally(self):
+        self._assert_load_fails_transactionally([], "checkpoint.*mapping")
+
+    def test_unsupported_format_version_fails_transactionally(self):
+        checkpoint = self._checkpoint()
+        checkpoint["policy_checkpoint_format_version"] = "2.0"
+        self._assert_load_fails_transactionally(
+            checkpoint, "Unsupported policy checkpoint format version"
+        )
+
+    def test_attack_model_name_mismatch_fails_transactionally(self):
+        checkpoint = self._checkpoint()
+        checkpoint["model_config"]["attack_model_name"] = "wrong-model"
+        self._assert_load_fails_transactionally(
+            checkpoint, "attack model name mismatch"
+        )
+
+    def test_policy_class_mismatch_fails_transactionally(self):
+        checkpoint = self._checkpoint()
+        checkpoint["model_config"]["policy_class"] = "wrong.Policy"
+        self._assert_load_fails_transactionally(
+            checkpoint, "policy class mismatch"
+        )
+
+    def test_load_state_dict_failure_rolls_back_target_tensors(self):
+        learner = self._learner()
+        snapshot = self._tensor_snapshot(learner)
+        checkpoint = self._checkpoint()
+        original_load_state_dict = learner.policy.load_state_dict
+        calls = 0
+
+        def fail_after_loading(state_dict, strict=True):
+            nonlocal calls
+            calls += 1
+            result = original_load_state_dict(state_dict, strict=strict)
+            if calls == 1:
+                raise RuntimeError("simulated load failure")
+            return result
+
+        with TemporaryDirectory() as directory:
+            path = self._save_checkpoint(directory, checkpoint)
+            with patch.object(
+                learner.policy,
+                "load_state_dict",
+                side_effect=fail_after_loading,
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError, "simulated load failure"
+                ):
+                    learner.load_policy_weights_only(path)
+
+        self.assertEqual(calls, 2)
+        self._assert_tensors_unchanged(learner, snapshot)
+        self.assertFalse(
+            hasattr(learner, "policy_initialization_provenance")
+        )
+
+    def test_load_and_rollback_failure_reports_integrity_error(self):
+        learner = self._learner()
+        checkpoint = self._checkpoint()
+        original_load_state_dict = learner.policy.load_state_dict
+        calls = 0
+
+        def fail_load_and_rollback(state_dict, strict=True):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                original_load_state_dict(state_dict, strict=strict)
+                raise RuntimeError("simulated original load failure")
+            raise RuntimeError("simulated rollback failure")
+
+        with TemporaryDirectory() as directory:
+            path = self._save_checkpoint(directory, checkpoint)
+            with patch.object(
+                learner.policy,
+                "load_state_dict",
+                side_effect=fail_load_and_rollback,
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "transactional integrity failure.*rollback failed",
+                ) as raised:
+                    learner.load_policy_weights_only(path)
+
+        self.assertEqual(calls, 2)
+        self.assertIsInstance(raised.exception.__cause__, RuntimeError)
+        self.assertIn(
+            "simulated original load failure",
+            str(raised.exception.__cause__),
+        )
+        self.assertFalse(
+            hasattr(learner, "policy_initialization_provenance")
+        )
+
+    def test_missing_parameter_key_fails_transactionally(self):
+        checkpoint = self._checkpoint()
+        checkpoint["policy_state_dict"].pop("linear.bias")
+        self._assert_load_fails_transactionally(checkpoint, "missing keys")
+
+    def test_extra_parameter_key_fails_transactionally(self):
+        checkpoint = self._checkpoint()
+        checkpoint["policy_state_dict"]["extra"] = torch.zeros(1)
+        self._assert_load_fails_transactionally(checkpoint, "extra keys")
+
+    def test_tensor_shape_mismatch_fails_transactionally(self):
+        checkpoint = self._checkpoint()
+        checkpoint["policy_state_dict"]["linear.weight"] = torch.zeros(3, 2)
+        self._assert_load_fails_transactionally(checkpoint, "shape mismatch")
+
+    def test_tensor_dtype_mismatch_fails_transactionally(self):
+        checkpoint = self._checkpoint()
+        checkpoint["policy_state_dict"]["linear.weight"] = checkpoint[
+            "policy_state_dict"
+        ]["linear.weight"].double()
+        self._assert_load_fails_transactionally(checkpoint, "dtype mismatch")
 
 
 if __name__ == "__main__":

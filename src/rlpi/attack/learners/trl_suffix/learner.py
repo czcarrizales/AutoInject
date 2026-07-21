@@ -2,9 +2,11 @@
 TRL-based suffix attack learner using GRPO.
 """
 
+import inspect
 import json
 import logging
 import os
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -46,6 +48,33 @@ from rlpi.attack.learners.trl_suffix.utils import (
 from rlpi.attack.templates.task_modifier import InjectionTaskModifier
 
 logger = logging.getLogger("TRLSuffixLearner")
+
+POLICY_CHECKPOINT_FORMAT_VERSION = "1.0"
+TORCH_LOAD_SUPPORTS_WEIGHTS_ONLY = (
+    "weights_only" in inspect.signature(torch.load).parameters
+)
+
+
+def _fully_qualified_class_name(instance: Any) -> str:
+    cls = type(instance)
+    return f"{cls.__module__}.{cls.__qualname__}"
+
+
+def _policy_dtype(policy: torch.nn.Module) -> str:
+    dtype = getattr(policy, "dtype", None)
+    if dtype is not None:
+        return str(dtype)
+
+    for tensor in policy.state_dict().values():
+        if torch.is_tensor(tensor) and tensor.is_floating_point():
+            return str(tensor.dtype)
+
+    raise ValueError("Cannot determine policy dtype for checkpoint metadata")
+
+
+def _tensor_raw_bytes(tensor: torch.Tensor) -> bytes:
+    byte_view = tensor.detach().cpu().contiguous().view(torch.uint8)
+    return byte_view.numpy().tobytes()
 
 
 class TRLSuffixLearner(AdaptiveAttackLearner):
@@ -845,13 +874,24 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
 
         # Save model state dict
         model_path = path
+        model_config = {
+            "attack_model_name": self.attack_model_name,
+            "policy_class": _fully_qualified_class_name(self.policy),
+            "dtype": _policy_dtype(self.policy),
+        }
+        model_type = getattr(
+            getattr(self.policy, "config", None), "model_type", None
+        )
+        if model_type is not None:
+            model_config["model_type"] = model_type
+
         torch.save(
             {
+                "policy_checkpoint_format_version": (
+                    POLICY_CHECKPOINT_FORMAT_VERSION
+                ),
                 "policy_state_dict": self.policy.state_dict(),
-                "model_config": {
-                    "attack_model_name": self.attack_model_name,
-                    "dtype": str(self.policy.dtype),
-                },
+                "model_config": model_config,
             },
             model_path,
         )
@@ -892,6 +932,167 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
         with open(state_path, "w") as f:
             json.dump(checkpoint_state, f, indent=2)
         logger.info(f"Saved checkpoint state to {state_path}")
+
+    def load_policy_weights_only(self, path: str | Path) -> None:
+        """Transactionally load compatible policy weights from a checkpoint."""
+        if TORCH_LOAD_SUPPORTS_WEIGHTS_ONLY:
+            checkpoint = torch.load(
+                path, map_location="cpu", weights_only=True
+            )
+        else:
+            checkpoint = torch.load(path, map_location="cpu")
+
+        if not isinstance(checkpoint, Mapping):
+            raise ValueError("Policy checkpoint must be a mapping")
+
+        version = checkpoint.get("policy_checkpoint_format_version")
+        if version != POLICY_CHECKPOINT_FORMAT_VERSION:
+            raise ValueError(
+                "Unsupported policy checkpoint format version "
+                f"{version!r}; expected {POLICY_CHECKPOINT_FORMAT_VERSION!r}"
+            )
+
+        model_config = checkpoint.get("model_config")
+        if not isinstance(model_config, Mapping):
+            raise ValueError(
+                "Policy checkpoint model_config must be a mapping"
+            )
+
+        saved_model_name = model_config.get("attack_model_name")
+        if saved_model_name != self.attack_model_name:
+            raise ValueError(
+                "Policy checkpoint attack model name mismatch: "
+                f"{saved_model_name!r} != {self.attack_model_name!r}"
+            )
+
+        target_policy_class = _fully_qualified_class_name(self.policy)
+        saved_policy_class = model_config.get("policy_class")
+        if saved_policy_class != target_policy_class:
+            raise ValueError(
+                "Policy checkpoint policy class mismatch: "
+                f"{saved_policy_class!r} != {target_policy_class!r}"
+            )
+
+        saved_model_type = model_config.get("model_type")
+        target_model_type = getattr(
+            getattr(self.policy, "config", None), "model_type", None
+        )
+        if saved_model_type != target_model_type:
+            raise ValueError(
+                "Policy checkpoint model type mismatch: "
+                f"{saved_model_type!r} != {target_model_type!r}"
+            )
+
+        target_policy_dtype = _policy_dtype(self.policy)
+        saved_policy_dtype = model_config.get("dtype")
+        if saved_policy_dtype != target_policy_dtype:
+            raise ValueError(
+                "Policy checkpoint dtype mismatch: "
+                f"{saved_policy_dtype!r} != {target_policy_dtype!r}"
+            )
+
+        if "policy_state_dict" not in checkpoint:
+            raise ValueError("policy_state_dict is required")
+        policy_state_dict = checkpoint["policy_state_dict"]
+        if not isinstance(policy_state_dict, Mapping):
+            raise ValueError("policy_state_dict must be a mapping")
+
+        target_state_dict = self.policy.state_dict()
+        source_keys = set(policy_state_dict)
+        target_keys = set(target_state_dict)
+        missing_keys = sorted(target_keys - source_keys)
+        extra_keys = sorted(source_keys - target_keys)
+        if missing_keys:
+            raise ValueError(
+                f"Policy checkpoint has missing keys: {missing_keys}"
+            )
+        if extra_keys:
+            raise ValueError(f"Policy checkpoint has extra keys: {extra_keys}")
+
+        for key, target_tensor in target_state_dict.items():
+            source_tensor = policy_state_dict[key]
+            if not torch.is_tensor(source_tensor):
+                raise ValueError(
+                    f"Policy checkpoint value for {key!r} must be a tensor"
+                )
+            if source_tensor.shape != target_tensor.shape:
+                raise ValueError(
+                    f"Policy checkpoint tensor shape mismatch for {key!r}: "
+                    f"{tuple(source_tensor.shape)} != "
+                    f"{tuple(target_tensor.shape)}"
+                )
+            if source_tensor.dtype != target_tensor.dtype:
+                raise ValueError(
+                    f"Policy checkpoint tensor dtype mismatch for {key!r}: "
+                    f"{source_tensor.dtype} != {target_tensor.dtype}"
+                )
+
+        original_state_dict = {
+            key: tensor.detach().cpu().clone()
+            for key, tensor in target_state_dict.items()
+        }
+        try:
+            self.policy.load_state_dict(policy_state_dict, strict=True)
+        except Exception as load_error:
+            rollback_error = None
+            try:
+                self.policy.load_state_dict(
+                    original_state_dict, strict=True
+                )
+            except Exception as exc:
+                rollback_error = exc
+
+            mismatched_tensors = []
+            verification_error = None
+            try:
+                restored_state_dict = self.policy.state_dict()
+                if restored_state_dict.keys() != original_state_dict.keys():
+                    mismatched_tensors.append("<state_dict keys>")
+                else:
+                    for key, original_tensor in original_state_dict.items():
+                        restored_tensor = restored_state_dict[key]
+                        if (
+                            restored_tensor.shape != original_tensor.shape
+                            or restored_tensor.dtype != original_tensor.dtype
+                            or _tensor_raw_bytes(restored_tensor)
+                            != _tensor_raw_bytes(original_tensor)
+                        ):
+                            mismatched_tensors.append(key)
+            except Exception as exc:
+                verification_error = exc
+
+            if (
+                rollback_error is not None
+                or verification_error is not None
+                or mismatched_tensors
+            ):
+                details = []
+                if rollback_error is not None:
+                    details.append(f"rollback failed: {rollback_error}")
+                if verification_error is not None:
+                    details.append(
+                        f"rollback verification failed: {verification_error}"
+                    )
+                if mismatched_tensors:
+                    details.append(
+                        "rollback left mismatched tensors: "
+                        f"{mismatched_tensors}"
+                    )
+                raise RuntimeError(
+                    "Policy checkpoint transactional integrity failure after "
+                    f"load error; {'; '.join(details)}"
+                ) from load_error
+            raise
+
+        self.policy_initialization_provenance = {
+            "source_checkpoint_path": str(path),
+            "policy_checkpoint_format_version": version,
+            "attack_model_name": saved_model_name,
+            "policy_class": saved_policy_class,
+            "model_type": saved_model_type,
+            "dtype": saved_policy_dtype,
+        }
+        logger.info(f"Loaded policy weights only from {path}")
 
     def load_model(self, path: str) -> None:
         """Load model and learner state from checkpoint.

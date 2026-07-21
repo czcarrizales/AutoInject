@@ -29,6 +29,53 @@ from rlpi.attack.utils import set_seed
 logger = logging.getLogger(__name__)
 
 
+def validate_checkpoint_initialization(cfg: DictConfig) -> None:
+    """Validate checkpoint initialization settings before experiment setup."""
+    mode = cfg.initialization_mode
+    source_path = cfg.source_checkpoint_path
+
+    if mode == "cold":
+        if source_path is not None:
+            raise ValueError(
+                "For initialization_mode 'cold', "
+                "source_checkpoint_path must be null"
+            )
+        return
+
+    if mode != "policy":
+        raise ValueError(
+            f"Unsupported initialization_mode {mode!r}; expected 'cold' or 'policy'"
+        )
+
+    if source_path is None:
+        raise ValueError(
+            "initialization_mode 'policy' requires source_checkpoint_path"
+        )
+
+    checkpoint_path = Path(source_path)
+    if checkpoint_path.suffix != ".pt":
+        raise ValueError("source_checkpoint_path must end in .pt")
+    if not checkpoint_path.exists():
+        raise ValueError(
+            f"source_checkpoint_path does not exist: {checkpoint_path}"
+        )
+    if not checkpoint_path.is_file():
+        raise ValueError(
+            f"source_checkpoint_path must be a regular file: {checkpoint_path}"
+        )
+    try:
+        with checkpoint_path.open("rb") as checkpoint_file:
+            checkpoint_file.read(1)
+    except OSError as exc:
+        raise ValueError(
+            f"source checkpoint is not readable: {checkpoint_path}"
+        ) from exc
+    if checkpoint_path.stat().st_size == 0:
+        raise ValueError(
+            f"source_checkpoint_path must be non-empty: {checkpoint_path}"
+        )
+
+
 def _find_latest_checkpoint(logdir: Path) -> Optional[Path]:
     """Find the checkpoint file in the log directory.
 
@@ -464,6 +511,8 @@ def _run_benchmarks(
 )
 def main(cfg: DictConfig):
     """Main entry point for the adaptive attack experiment."""
+    validate_checkpoint_initialization(cfg)
+
     print("Configuration used:")
     print(cfg)  # Print the loaded config
 

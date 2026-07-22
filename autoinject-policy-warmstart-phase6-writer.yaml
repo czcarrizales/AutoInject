@@ -1,0 +1,197 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-policy-warmstart-phase6-writer
+  labels:
+    app.kubernetes.io/name: autoinject
+    app.kubernetes.io/instance: policy-warmstart-phase6
+    autoinject-phase: "6"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject
+        app.kubernetes.io/instance: policy-warmstart-phase6
+        autoinject-phase: "6"
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: checkpoint-writer
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        imagePullPolicy: IfNotPresent
+        command: ["bash", "-lc"]
+        args:
+        - |
+          set -Eeuo pipefail
+
+          readonly PHASE6_RUN_ID="phase6-b83d45b-20260722T211738Z"
+          readonly RESULTS_MOUNT="${RESULTS_MOUNT:-/workspace/results}"
+          readonly RESULT_DIR="${RESULTS_MOUNT}/autoinject-policy-warmstart-phase6/${PHASE6_RUN_ID}"
+          readonly WRITER_POD="${POD_NAME:-$(hostname)}"
+          readonly WRITER_JOB="${JOB_NAME:-autoinject-policy-warmstart-phase6-writer}"
+
+          if [[ -e "${RESULT_DIR}" ]]; then
+            echo "Refusing to overwrite existing Phase 6 result directory: ${RESULT_DIR}" >&2
+            exit 64
+          fi
+          mkdir -p "${RESULT_DIR}"
+
+          python - "${RESULT_DIR}" "${PHASE6_RUN_ID}" "${WRITER_POD}" "${WRITER_JOB}" <<'PYTHON'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import sys
+          from datetime import datetime, timezone
+
+          import torch
+          from torch import nn
+
+
+          FORMAT_VERSION = "1.0"
+          ATTACK_MODEL_NAME = "phase6-tiny-policy"
+          POLICY_CLASS = "__main__.TinyPolicy"
+          MODEL_TYPE = "phase6-tiny"
+          DTYPE = "torch.float32"
+          EXPECTED_KEYS = ["linear.weight", "linear.bias"]
+          EXPECTED_SHAPES = {
+              "linear.weight": [2, 2],
+              "linear.bias": [2],
+          }
+          EXPECTED_DTYPES = {
+              "linear.weight": DTYPE,
+              "linear.bias": DTYPE,
+          }
+
+
+          class TinyPolicy(nn.Module):
+              def __init__(self):
+                  super().__init__()
+                  self.linear = nn.Linear(2, 2)
+
+
+          result_dir = pathlib.Path(sys.argv[1])
+          phase6_run_id = sys.argv[2]
+          writer_pod = sys.argv[3]
+          writer_job = sys.argv[4]
+          checkpoint_path = result_dir / "checkpoint.pt"
+          checkpoint_temp = result_dir / ".checkpoint.pt.tmp"
+          checksum_path = result_dir / "checkpoint.sha256"
+          metadata_path = result_dir / "checkpoint_metadata.json"
+          success_path = result_dir / "writer_success.json"
+
+          for path in (
+              checkpoint_path,
+              checkpoint_temp,
+              checksum_path,
+              metadata_path,
+              success_path,
+          ):
+              if path.exists():
+                  raise RuntimeError(f"Refusing to overwrite existing artifact: {path}")
+
+          model = TinyPolicy()
+          with torch.no_grad():
+              model.linear.weight.copy_(
+                  torch.tensor(
+                      [[1.25, -2.5], [3.75, 4.5]], dtype=torch.float32
+                  )
+              )
+              model.linear.bias.copy_(
+                  torch.tensor([0.125, -0.25], dtype=torch.float32)
+              )
+
+          checkpoint = {
+              "policy_checkpoint_format_version": FORMAT_VERSION,
+              "policy_state_dict": model.state_dict(),
+              "model_config": {
+                  "attack_model_name": ATTACK_MODEL_NAME,
+                  "policy_class": POLICY_CLASS,
+                  "model_type": MODEL_TYPE,
+                  "dtype": DTYPE,
+              },
+          }
+          torch.save(checkpoint, checkpoint_temp)
+          if not checkpoint_temp.is_file() or checkpoint_temp.stat().st_size == 0:
+              raise RuntimeError("Temporary checkpoint was not written correctly")
+          os.replace(checkpoint_temp, checkpoint_path)
+
+          checkpoint_bytes = checkpoint_path.read_bytes()
+          checkpoint_sha256 = hashlib.sha256(checkpoint_bytes).hexdigest()
+          writer_timestamp = datetime.now(timezone.utc).isoformat()
+
+          checksum_temp = result_dir / ".checkpoint.sha256.tmp"
+          checksum_temp.write_text(f"{checkpoint_sha256}\n", encoding="utf-8")
+          os.replace(checksum_temp, checksum_path)
+
+          metadata = {
+              "phase6_run_id": phase6_run_id,
+              "writer_timestamp": writer_timestamp,
+              "writer_hostname_or_pod": writer_pod,
+              "writer_job": writer_job,
+              "checkpoint_relative_path": (
+                  f"autoinject-policy-warmstart-phase6/{phase6_run_id}/checkpoint.pt"
+              ),
+              "checkpoint_size_bytes": len(checkpoint_bytes),
+              "checkpoint_sha256": checkpoint_sha256,
+              "policy_checkpoint_format_version": FORMAT_VERSION,
+              "expected_state_dict_keys": EXPECTED_KEYS,
+              "expected_tensor_shapes": EXPECTED_SHAPES,
+              "expected_tensor_dtypes": EXPECTED_DTYPES,
+          }
+          metadata_temp = result_dir / ".checkpoint_metadata.json.tmp"
+          metadata_temp.write_text(
+              json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          os.replace(metadata_temp, metadata_path)
+
+          success = {
+              "phase6_run_id": phase6_run_id,
+              "writer_timestamp": writer_timestamp,
+              "writer_hostname_or_pod": writer_pod,
+              "writer_job": writer_job,
+              "checkpoint_sha256": checkpoint_sha256,
+              "status": "success",
+          }
+          success_temp = result_dir / ".writer_success.json.tmp"
+          success_temp.write_text(
+              json.dumps(success, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          os.replace(success_temp, success_path)
+
+          print(
+              "Phase 6 writer succeeded:",
+              f"run_id={phase6_run_id}",
+              f"checkpoint={checkpoint_path}",
+              f"size={len(checkpoint_bytes)}",
+              f"sha256={checkpoint_sha256}",
+          )
+          PYTHON
+        env:
+        - name: RESULTS_MOUNT
+          value: /workspace/results
+        - name: JOB_NAME
+          value: autoinject-policy-warmstart-phase6-writer
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            cpu: "500m"
+            memory: 1Gi
+          limits:
+            cpu: "600m"
+            memory: "1200Mi"
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace/results
+          subPath: results
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace

@@ -1,0 +1,245 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-policy-warmstart-phase6-reader
+  labels:
+    app.kubernetes.io/name: autoinject
+    app.kubernetes.io/instance: policy-warmstart-phase6
+    autoinject-phase: "6"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject
+        app.kubernetes.io/instance: policy-warmstart-phase6
+        autoinject-phase: "6"
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: checkpoint-reader
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        imagePullPolicy: IfNotPresent
+        command: ["bash", "-lc"]
+        args:
+        - |
+          set -Eeuo pipefail
+
+          readonly PHASE6_RUN_ID="phase6-b83d45b-20260722T211738Z"
+          readonly RESULTS_MOUNT="${RESULTS_MOUNT:-/workspace/results}"
+          readonly RESULT_DIR="${RESULTS_MOUNT}/autoinject-policy-warmstart-phase6/${PHASE6_RUN_ID}"
+          readonly READER_POD="${POD_NAME:-$(hostname)}"
+          readonly READER_JOB="${JOB_NAME:-autoinject-policy-warmstart-phase6-reader}"
+
+          for artifact in writer_success.json checkpoint.pt checkpoint.sha256 checkpoint_metadata.json; do
+            if [[ ! -e "${RESULT_DIR}/${artifact}" ]]; then
+              echo "Required writer artifact is missing: ${RESULT_DIR}/${artifact}" >&2
+              exit 66
+            fi
+          done
+          if [[ ! -f "${RESULT_DIR}/checkpoint.pt" || ! -s "${RESULT_DIR}/checkpoint.pt" ]]; then
+            echo "Checkpoint must be a non-empty regular file: ${RESULT_DIR}/checkpoint.pt" >&2
+            exit 66
+          fi
+          if [[ -e "${RESULT_DIR}/reader_success.json" ]]; then
+            echo "Refusing to overwrite existing reader success artifact: ${RESULT_DIR}/reader_success.json" >&2
+            exit 64
+          fi
+
+          python - "${RESULT_DIR}" "${PHASE6_RUN_ID}" "${READER_POD}" "${READER_JOB}" <<'PYTHON'
+          import hashlib
+          import inspect
+          import json
+          import os
+          import pathlib
+          import sys
+          from collections.abc import Mapping
+          from datetime import datetime, timezone
+
+          import torch
+          from torch import nn
+
+
+          FORMAT_VERSION = "1.0"
+          ATTACK_MODEL_NAME = "phase6-tiny-policy"
+          POLICY_CLASS = "__main__.TinyPolicy"
+          MODEL_TYPE = "phase6-tiny"
+          DTYPE = "torch.float32"
+          EXPECTED_KEYS = ["linear.weight", "linear.bias"]
+          EXPECTED_SHAPES = {
+              "linear.weight": [2, 2],
+              "linear.bias": [2],
+          }
+          EXPECTED_DTYPES = {
+              "linear.weight": DTYPE,
+              "linear.bias": DTYPE,
+          }
+          EXPECTED_WEIGHT = torch.tensor(
+              [[1.25, -2.5], [3.75, 4.5]], dtype=torch.float32
+          )
+          EXPECTED_BIAS = torch.tensor([0.125, -0.25], dtype=torch.float32)
+
+
+          class TinyPolicy(nn.Module):
+              def __init__(self):
+                  super().__init__()
+                  self.linear = nn.Linear(2, 2)
+
+
+          result_dir = pathlib.Path(sys.argv[1])
+          phase6_run_id = sys.argv[2]
+          reader_pod = sys.argv[3]
+          reader_job = sys.argv[4]
+          checkpoint_path = result_dir / "checkpoint.pt"
+          checksum_path = result_dir / "checkpoint.sha256"
+          metadata_path = result_dir / "checkpoint_metadata.json"
+          writer_success_path = result_dir / "writer_success.json"
+          reader_success_path = result_dir / "reader_success.json"
+
+          metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+          writer_success = json.loads(
+              writer_success_path.read_text(encoding="utf-8")
+          )
+          for document_name, document in (
+              ("checkpoint metadata", metadata),
+              ("writer success marker", writer_success),
+          ):
+              if not isinstance(document, Mapping):
+                  raise ValueError(f"{document_name} must contain a JSON object")
+              if document.get("phase6_run_id") != phase6_run_id:
+                  raise ValueError(f"{document_name} has the wrong phase6_run_id")
+          if writer_success.get("status") != "success":
+              raise ValueError("Writer success marker does not report success")
+          writer_pod = metadata.get("writer_hostname_or_pod")
+          writer_job = metadata.get("writer_job")
+          if not writer_pod or writer_pod == reader_pod:
+              raise ValueError(
+                  "Reader must run in a different pod from the checkpoint writer"
+              )
+          if not writer_job or writer_job == reader_job:
+              raise ValueError(
+                  "Reader must run in a different Job from the checkpoint writer"
+              )
+
+          before_stat = checkpoint_path.stat()
+          checkpoint_bytes = checkpoint_path.read_bytes()
+          checkpoint_sha256 = hashlib.sha256(checkpoint_bytes).hexdigest()
+          recorded_checksum = checksum_path.read_text(encoding="utf-8").strip()
+          if checkpoint_sha256 != recorded_checksum:
+              raise ValueError("Checkpoint SHA-256 does not match checkpoint.sha256")
+          if checkpoint_sha256 != metadata.get("checkpoint_sha256"):
+              raise ValueError("Checkpoint SHA-256 does not match metadata")
+          if checkpoint_sha256 != writer_success.get("checkpoint_sha256"):
+              raise ValueError("Checkpoint SHA-256 does not match writer success marker")
+          if len(checkpoint_bytes) != metadata.get("checkpoint_size_bytes"):
+              raise ValueError("Checkpoint size does not match metadata")
+
+          load_kwargs = {"map_location": "cpu"}
+          if "weights_only" in inspect.signature(torch.load).parameters:
+              load_kwargs["weights_only"] = True
+          checkpoint = torch.load(checkpoint_path, **load_kwargs)
+          if not isinstance(checkpoint, Mapping):
+              raise ValueError("Checkpoint must be a mapping")
+          if checkpoint.get("policy_checkpoint_format_version") != FORMAT_VERSION:
+              raise ValueError("Unsupported policy checkpoint format version")
+
+          model_config = checkpoint.get("model_config")
+          expected_model_config = {
+              "attack_model_name": ATTACK_MODEL_NAME,
+              "policy_class": POLICY_CLASS,
+              "model_type": MODEL_TYPE,
+              "dtype": DTYPE,
+          }
+          if not isinstance(model_config, Mapping):
+              raise ValueError("Checkpoint model_config must be a mapping")
+          if dict(model_config) != expected_model_config:
+              raise ValueError("Checkpoint model metadata does not match")
+
+          if metadata.get("policy_checkpoint_format_version") != FORMAT_VERSION:
+              raise ValueError("Metadata has the wrong checkpoint format version")
+          if metadata.get("expected_state_dict_keys") != EXPECTED_KEYS:
+              raise ValueError("Metadata has unexpected state-dict keys")
+          if metadata.get("expected_tensor_shapes") != EXPECTED_SHAPES:
+              raise ValueError("Metadata has unexpected tensor shapes")
+          if metadata.get("expected_tensor_dtypes") != EXPECTED_DTYPES:
+              raise ValueError("Metadata has unexpected tensor dtypes")
+
+          policy_state_dict = checkpoint.get("policy_state_dict")
+          if not isinstance(policy_state_dict, Mapping):
+              raise ValueError("policy_state_dict must be a mapping")
+          if list(policy_state_dict) != EXPECTED_KEYS:
+              raise ValueError("policy_state_dict keys do not match exactly")
+          for key in EXPECTED_KEYS:
+              tensor = policy_state_dict[key]
+              if not isinstance(tensor, torch.Tensor):
+                  raise ValueError(f"policy_state_dict[{key!r}] must be a tensor")
+              if list(tensor.shape) != EXPECTED_SHAPES[key]:
+                  raise ValueError(f"Tensor shape mismatch for {key}")
+              if str(tensor.dtype) != EXPECTED_DTYPES[key]:
+                  raise ValueError(f"Tensor dtype mismatch for {key}")
+
+          model = TinyPolicy()
+          model.load_state_dict(policy_state_dict, strict=True)
+          if not torch.equal(model.linear.weight.detach(), EXPECTED_WEIGHT):
+              raise ValueError("Loaded weight tensor does not match fixed values")
+          if not torch.equal(model.linear.bias.detach(), EXPECTED_BIAS):
+              raise ValueError("Loaded bias tensor does not match fixed values")
+
+          after_stat = checkpoint_path.stat()
+          after_sha256 = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+          if (
+              before_stat.st_size != after_stat.st_size
+              or before_stat.st_mtime_ns != after_stat.st_mtime_ns
+              or checkpoint_sha256 != after_sha256
+          ):
+              raise RuntimeError("Reader modified checkpoint.pt")
+
+          success = {
+              "phase6_run_id": phase6_run_id,
+              "reader_timestamp": datetime.now(timezone.utc).isoformat(),
+              "reader_hostname_or_pod": reader_pod,
+              "reader_job": reader_job,
+              "verified_checkpoint_sha256": checkpoint_sha256,
+              "loaded_state_dict_keys": EXPECTED_KEYS,
+              "status": "success",
+          }
+          success_temp = result_dir / ".reader_success.json.tmp"
+          success_temp.write_text(
+              json.dumps(success, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          os.replace(success_temp, reader_success_path)
+
+          print(
+              "Phase 6 reader succeeded:",
+              f"run_id={phase6_run_id}",
+              f"reader={reader_pod}",
+              f"sha256={checkpoint_sha256}",
+              f"keys={EXPECTED_KEYS}",
+          )
+          PYTHON
+        env:
+        - name: RESULTS_MOUNT
+          value: /workspace/results
+        - name: JOB_NAME
+          value: autoinject-policy-warmstart-phase6-reader
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            cpu: "500m"
+            memory: 1Gi
+          limits:
+            cpu: "600m"
+            memory: "1200Mi"
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace/results
+          subPath: results
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace

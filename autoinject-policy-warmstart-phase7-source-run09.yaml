@@ -1,0 +1,553 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-policy-warmstart-phase7-source-run09
+  labels:
+    app.kubernetes.io/name: autoinject
+    app.kubernetes.io/instance: policy-warmstart-phase7-source-run09
+    autoinject-phase: "7"
+    autoinject-role: source-policy
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 259200
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject
+        app.kubernetes.io/instance: policy-warmstart-phase7-source-run09
+        autoinject-phase: "7"
+        autoinject-role: source-policy
+    spec:
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-A100-80GB-PCIe
+                - NVIDIA-A100-PCIE-40GB
+                - NVIDIA-A100-SXM4-80GB
+                - NVIDIA-A40
+                - NVIDIA-GH200-480GB
+                - NVIDIA-H100-80GB-HBM3
+                - NVIDIA-H200-NVL
+                - NVIDIA-L40
+                - NVIDIA-L40S
+                - NVIDIA-RTX-A6000
+                - NVIDIA-RTX-PRO-6000-Blackwell-Max-Q-Workstation-Edition
+                - Quadro-RTX-8000
+      initContainers:
+      # A future large Indexed Job should fetch once, stage one immutable
+      # verified archive, and have each index copy and verify that archive.
+      - name: stage-pinned-warmstart-source
+        image: alpine/git:v2.47.2
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-ec"]
+        args:
+        - |
+          EXPECTED_COMMIT="a2db2f66a679d9a0720b00112777dca3d7501932"
+          REPOSITORY_URL="https://github.com/czcarrizales/AutoInject.git"
+          PRIVATE_ROOT="/work/AutoInject"
+          FETCH_ROOT="/work/.AutoInject-fetch"
+          VERIFIED_COMMIT_FILE="/work/source-commit.txt"
+          MAX_FETCH_ATTEMPTS=5
+
+          if [ -e "${PRIVATE_ROOT}" ]; then
+            echo "Refusing to overwrite private source directory: ${PRIVATE_ROOT}" >&2
+            exit 66
+          fi
+          if [ -e "${VERIFIED_COMMIT_FILE}" ]; then
+            echo "Refusing to overwrite commit record: ${VERIFIED_COMMIT_FILE}" >&2
+            exit 66
+          fi
+
+          FETCH_SUCCEEDED=false
+          ATTEMPT=1
+          while [ "${ATTEMPT}" -le "${MAX_FETCH_ATTEMPTS}" ]; do
+            echo "Fetching pinned source commit ${EXPECTED_COMMIT} (attempt ${ATTEMPT}/${MAX_FETCH_ATTEMPTS})"
+            rm -rf -- "${FETCH_ROOT}"
+            mkdir "${FETCH_ROOT}"
+            git -C "${FETCH_ROOT}" init --quiet
+            git -C "${FETCH_ROOT}" remote add origin "${REPOSITORY_URL}"
+
+            if git -C "${FETCH_ROOT}" fetch \
+                --depth=1 --no-tags origin "${EXPECTED_COMMIT}"; then
+              git -C "${FETCH_ROOT}" checkout --quiet --detach FETCH_HEAD
+              SOURCE_COMMIT="$(
+                git -C "${FETCH_ROOT}" rev-parse --verify 'HEAD^{commit}'
+              )"
+              if [ "${SOURCE_COMMIT}" != "${EXPECTED_COMMIT}" ]; then
+                echo "Fetched source commit mismatch: expected ${EXPECTED_COMMIT}, got ${SOURCE_COMMIT}" >&2
+                exit 65
+              fi
+              FETCH_SUCCEEDED=true
+              break
+            fi
+
+            echo "Pinned source fetch attempt ${ATTEMPT} failed" >&2
+            if [ "${ATTEMPT}" -eq "${MAX_FETCH_ATTEMPTS}" ]; then
+              break
+            fi
+            case "${ATTEMPT}" in
+              1) DELAY_SECONDS=5 ;;
+              2) DELAY_SECONDS=10 ;;
+              3) DELAY_SECONDS=20 ;;
+              4) DELAY_SECONDS=30 ;;
+              *) echo "Unexpected retry attempt: ${ATTEMPT}" >&2; exit 70 ;;
+            esac
+            echo "Retrying pinned source fetch in ${DELAY_SECONDS} seconds" >&2
+            sleep "${DELAY_SECONDS}"
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+          if [ "${FETCH_SUCCEEDED}" != true ]; then
+            rm -rf -- "${FETCH_ROOT}"
+            echo "Unable to fetch pinned source commit after ${MAX_FETCH_ATTEMPTS} attempts" >&2
+            exit 69
+          fi
+          if [ ! -f "${FETCH_ROOT}/setup.py" ] || \
+             [ ! -d "${FETCH_ROOT}/src/rlpi" ]; then
+            echo "Fetched source checkout is incomplete" >&2
+            exit 65
+          fi
+
+          mv "${FETCH_ROOT}" "${PRIVATE_ROOT}"
+          SOURCE_COMMIT="$(
+            git -C "${PRIVATE_ROOT}" rev-parse --verify 'HEAD^{commit}'
+          )"
+          if [ "${SOURCE_COMMIT}" != "${EXPECTED_COMMIT}" ]; then
+            echo "Staged source commit mismatch: expected ${EXPECTED_COMMIT}, got ${SOURCE_COMMIT}" >&2
+            exit 65
+          fi
+          if [ ! -f "${PRIVATE_ROOT}/setup.py" ] || \
+             [ ! -d "${PRIVATE_ROOT}/src/rlpi" ]; then
+            echo "Private staged source checkout is incomplete" >&2
+            exit 65
+          fi
+          printf '%s\n' "${SOURCE_COMMIT}" > "${VERIFIED_COMMIT_FILE}"
+        resources:
+          requests:
+            cpu: "500m"
+            memory: 1Gi
+          limits:
+            cpu: "500m"
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: private-work
+          mountPath: /work
+      containers:
+      - name: source-policy-run
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        imagePullPolicy: IfNotPresent
+        command: ["bash", "-lc"]
+        args:
+        - |
+          set -Eeuo pipefail
+
+          readonly EXPECTED_COMMIT="a2db2f66a679d9a0720b00112777dca3d7501932"
+          readonly PRIVATE_ROOT="/work/AutoInject"
+          readonly PYTHON_BOOTSTRAP_DIR="/work/python-bootstrap"
+          readonly VERIFIED_COMMIT_FILE="/work/source-commit.txt"
+          readonly REPOSITORY_URL="https://github.com/czcarrizales/AutoInject.git"
+          readonly RUNTIME_PYTHON="/opt/autoinject-venv/bin/python"
+          readonly RUN_ID="phase7-a2db2f6-20260722T214306Z"
+          readonly RESULTS_BASE="/workspace/results/autoinject-policy-warmstart/source-run09"
+          readonly RESULT_ROOT="${RESULTS_BASE}/${RUN_ID}"
+          readonly RUN_DIR="${RESULT_ROOT}/run"
+          readonly JOB_LOG="${RESULT_ROOT}/job.log"
+          readonly RUN_METADATA="${RESULT_ROOT}/run_metadata.json"
+          readonly SOURCE_SUCCESS="${RESULT_ROOT}/source_success.json"
+          readonly CHECKPOINT_PATH="${RUN_DIR}/checkpoint.pt"
+          readonly CHECKPOINT_STATE_PATH="${RUN_DIR}/checkpoint_state.json"
+
+          if [[ ! -r "${VERIFIED_COMMIT_FILE}" ]]; then
+            echo "Missing init-container commit record: ${VERIFIED_COMMIT_FILE}" >&2
+            exit 65
+          fi
+          IFS= read -r SOURCE_COMMIT < "${VERIFIED_COMMIT_FILE}"
+          if [[ "${SOURCE_COMMIT}" != "${EXPECTED_COMMIT}" ]]; then
+            echo "Recorded source commit mismatch: expected ${EXPECTED_COMMIT}, got ${SOURCE_COMMIT}" >&2
+            exit 65
+          fi
+          if [[ ! -x "${RUNTIME_PYTHON}" ]]; then
+            echo "Reusable AutoInject Python is missing: ${RUNTIME_PYTHON}" >&2
+            exit 65
+          fi
+          if [[ ! -d "${PRIVATE_ROOT}" ]]; then
+            echo "Private warm-start source is missing: ${PRIVATE_ROOT}" >&2
+            exit 65
+          fi
+          STAGED_HEAD="$(<"${PRIVATE_ROOT}/.git/HEAD")"
+          if [[ "${STAGED_HEAD}" != "${EXPECTED_COMMIT}" ]]; then
+            echo "Detached staged HEAD mismatch: expected ${EXPECTED_COMMIT}, got ${STAGED_HEAD}" >&2
+            exit 65
+          fi
+          if [[ ! -f "${PRIVATE_ROOT}/setup.py" || \
+                ! -d "${PRIVATE_ROOT}/src/rlpi" ]]; then
+            echo "Private warm-start source checkout is incomplete" >&2
+            exit 65
+          fi
+
+          mkdir -p "${RESULTS_BASE}"
+          if [[ -e "${RESULT_ROOT}" ]]; then
+            echo "Refusing to overwrite existing Phase 7 result directory: ${RESULT_ROOT}" >&2
+            exit 66
+          fi
+          mkdir "${RESULT_ROOT}"
+          mkdir "${RUN_DIR}"
+          exec > >(tee -a "${JOB_LOG}") 2>&1
+
+          mkdir -p /work/tmp /work/cache/torch /work/cache/huggingface/modules
+          if [[ -e "${PYTHON_BOOTSTRAP_DIR}" ]]; then
+            echo "Refusing to overwrite Python bootstrap directory" >&2
+            exit 66
+          fi
+          mkdir "${PYTHON_BOOTSTRAP_DIR}"
+          cat > "${PYTHON_BOOTSTRAP_DIR}/sitecustomize.py" <<'PYSITECUSTOMIZE'
+          import os
+          import sys
+
+          sys.path[:] = [
+              entry
+              for entry in sys.path
+              if not os.path.normpath(os.fspath(entry)).startswith(
+                  "/workspace/"
+              )
+          ]
+          PYSITECUSTOMIZE
+
+          "${RUNTIME_PYTHON}" - \
+            "${RUN_METADATA}" "${RUN_ID}" "${REPOSITORY_URL}" \
+            "${EXPECTED_COMMIT}" \
+            "${POD_NAME}" "${POD_UID}" "${NODE_NAME}" <<'PYMETADATA'
+          import json
+          import pathlib
+          import sys
+          from datetime import datetime, timezone
+
+          metadata_path = pathlib.Path(sys.argv[1])
+          metadata = {
+              "phase": 7,
+              "role": "source-policy",
+              "run_id": sys.argv[2],
+              "repository_url": sys.argv[3],
+              "git_commit": sys.argv[4],
+              "created_at": datetime.now(timezone.utc).isoformat(),
+              "pod_name": sys.argv[5],
+              "pod_uid": sys.argv[6],
+              "node_name": sys.argv[7],
+              "suite": "banking",
+              "user_task": "user_task_14",
+              "injection_task": "injection_task_7",
+              "victim_model": "facebook/Meta-SecAlign-8B",
+              "feedback_model": "gemma-small",
+              "attack_model": "Qwen/Qwen2-1.5B",
+              "global_seed": 1,
+              "learner_seed": 42,
+              "query_budget": 260,
+              "initialization_mode": "cold",
+              "source_checkpoint_path": None,
+          }
+          metadata_path.write_text(
+              json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PYMETADATA
+
+          cd "${RUN_DIR}"
+          echo "=== PHASE 7 SOURCE POLICY RUN ==="
+          echo "repository_url: ${REPOSITORY_URL}"
+          echo "source_commit: ${SOURCE_COMMIT}"
+          echo "run_id: ${RUN_ID}"
+          echo "result_root: ${RESULT_ROOT}"
+          echo "suite: banking"
+          echo "user_task: user_task_14"
+          echo "injection_task: injection_task_7"
+          echo "victim_model: facebook/Meta-SecAlign-8B"
+          echo "feedback_model: gemma-small"
+          echo "attack_model: Qwen/Qwen2-1.5B"
+          echo "global_seed: 1"
+          echo "learner_seed: 42"
+          echo "query_budget: 260"
+          echo "initialization_mode: cold"
+          echo "source_checkpoint_path: null"
+          nvidia-smi
+
+          echo "=== VERIFY PRIVATE SOURCE IMPORTS ==="
+          "${RUNTIME_PYTHON}" - <<'PYIMPORTS'
+          import pathlib
+
+          import agentdojo
+          import rlpi.agentdojo.adaptive_agentdojo as adaptive_agentdojo
+
+          private_root = pathlib.Path("/work/AutoInject").resolve()
+          for module in (agentdojo, adaptive_agentdojo):
+              module_path = pathlib.Path(module.__file__).resolve()
+              module_path.relative_to(private_root)
+              print(f"{module.__name__}: {module_path}")
+          PYIMPORTS
+
+          echo "=== RUN AUTOINJECT SOURCE TRAINING ==="
+          "${RUNTIME_PYTHON}" -u -m rlpi.agentdojo.adaptive_agentdojo \
+            exp_ident=policy-warmstart-phase7-source-run09 \
+            model=facebook/Meta-SecAlign-8B \
+            suite=banking \
+            query_budget=260 \
+            seed=1 \
+            "user_tasks=[user_task_14]" \
+            "injection_tasks=[injection_task_7]" \
+            learner=trl_suffix_meta_secalign_repro \
+            learner.seed=42 \
+            learner.min_experiences_for_training=1 \
+            learner.grpo_num_generations=8 \
+            learner.grpo_num_iterations=5 \
+            learner.max_suffix_length=30 \
+            +learner.feedback_model=gemma-small \
+            initialization_mode=cold \
+            source_checkpoint_path=null \
+            "hydra.run.dir=${RUN_DIR}" \
+            hydra.job.chdir=false
+
+          echo "=== VERIFY FINAL SOURCE CHECKPOINT ==="
+          if [[ ! -f "${CHECKPOINT_PATH}" || ! -s "${CHECKPOINT_PATH}" ]]; then
+            echo "Final policy checkpoint is missing or empty: ${CHECKPOINT_PATH}" >&2
+            exit 67
+          fi
+          if [[ ! -f "${CHECKPOINT_STATE_PATH}" || ! -s "${CHECKPOINT_STATE_PATH}" ]]; then
+            echo "Checkpoint state JSON is missing or empty: ${CHECKPOINT_STATE_PATH}" >&2
+            exit 67
+          fi
+
+          "${RUNTIME_PYTHON}" - \
+            "${CHECKPOINT_PATH}" "${CHECKPOINT_STATE_PATH}" \
+            "${RUN_METADATA}" "${SOURCE_SUCCESS}" "${RUN_ID}" \
+            "${REPOSITORY_URL}" "${EXPECTED_COMMIT}" <<'PYVERIFY'
+          import inspect
+          import json
+          import os
+          import pathlib
+          import sys
+          from collections.abc import Mapping
+          from datetime import datetime, timezone
+
+          import torch
+
+          checkpoint_path = pathlib.Path(sys.argv[1]).resolve()
+          state_path = pathlib.Path(sys.argv[2]).resolve()
+          metadata_path = pathlib.Path(sys.argv[3]).resolve()
+          success_path = pathlib.Path(sys.argv[4]).resolve()
+          run_id = sys.argv[5]
+          repository_url = sys.argv[6]
+          git_commit = sys.argv[7]
+
+          state = json.loads(state_path.read_text(encoding="utf-8"))
+          if not isinstance(state, Mapping):
+              raise ValueError("Checkpoint state JSON must contain an object")
+          initialization = state.get("checkpoint_initialization")
+          if not isinstance(initialization, Mapping):
+              raise ValueError("Checkpoint initialization provenance is missing")
+          if initialization.get("mode") != "cold":
+              raise ValueError("Checkpoint initialization mode is not cold")
+          if initialization.get("source_checkpoint_path") is not None:
+              raise ValueError("Cold checkpoint has a source checkpoint path")
+
+          model_info = state.get("model_info")
+          if not isinstance(model_info, Mapping):
+              raise ValueError("Checkpoint model_info is missing")
+          if model_info.get("attack_model_name") != "Qwen/Qwen2-1.5B":
+              raise ValueError("Checkpoint state has the wrong attack model")
+          recorded_checkpoint = pathlib.Path(
+              model_info.get("checkpoint_path", "")
+          ).resolve()
+          if recorded_checkpoint != checkpoint_path:
+              raise ValueError(
+                  "Checkpoint state does not refer to the persistent checkpoint"
+              )
+
+          reporting = state.get("experiment_reporting")
+          if not isinstance(reporting, Mapping):
+              raise ValueError("Experiment reporting state is missing")
+          if not isinstance(reporting.get("cycles"), list):
+              raise ValueError("Experiment reporting cycles are missing")
+
+          load_kwargs = {"map_location": "cpu"}
+          if "weights_only" in inspect.signature(torch.load).parameters:
+              load_kwargs["weights_only"] = True
+          checkpoint = torch.load(checkpoint_path, **load_kwargs)
+          if not isinstance(checkpoint, Mapping):
+              raise ValueError("Policy checkpoint must be a mapping")
+          if checkpoint.get("policy_checkpoint_format_version") != "1.0":
+              raise ValueError("Policy checkpoint format version is not 1.0")
+          model_config = checkpoint.get("model_config")
+          if not isinstance(model_config, Mapping):
+              raise ValueError("Policy checkpoint model_config is missing")
+          if model_config.get("attack_model_name") != "Qwen/Qwen2-1.5B":
+              raise ValueError("Policy checkpoint has the wrong attack model")
+          policy_state_dict = checkpoint.get("policy_state_dict")
+          if not isinstance(policy_state_dict, Mapping) or not policy_state_dict:
+              raise ValueError("Policy checkpoint state dict is missing or empty")
+
+          required_artifacts = (
+              checkpoint_path.parent / ".hydra" / "config.yaml",
+              checkpoint_path.parent / "adaptive_agentdojo.log",
+              checkpoint_path.parent / "reward_stats.jsonl",
+              checkpoint_path.parent
+              / "grpo_training_outputs"
+              / "training_metrics.jsonl",
+              checkpoint_path.parent
+              / "grpo_training_outputs"
+              / "grpo_evaluations.jsonl",
+          )
+          for artifact in required_artifacts:
+              if not artifact.is_file() or artifact.stat().st_size == 0:
+                  raise ValueError(
+                      f"Required configuration/reporting artifact is missing: {artifact}"
+                  )
+
+          run_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+          success = {
+              "status": "success",
+              "completed_at": datetime.now(timezone.utc).isoformat(),
+              "run_id": run_id,
+              "repository_url": repository_url,
+              "git_commit": git_commit,
+              "checkpoint_path": str(checkpoint_path),
+              "checkpoint_state_path": str(state_path),
+              "checkpoint_size_bytes": checkpoint_path.stat().st_size,
+              "policy_checkpoint_format_version": "1.0",
+              "suite": "banking",
+              "user_task": "user_task_14",
+              "injection_task": "injection_task_7",
+              "victim_model": "facebook/Meta-SecAlign-8B",
+              "feedback_model": "gemma-small",
+              "attack_model": "Qwen/Qwen2-1.5B",
+              "global_seed": 1,
+              "learner_seed": 42,
+              "query_budget": 260,
+              "initialization_mode": "cold",
+              "source_checkpoint_path": None,
+              "pod_name": run_metadata["pod_name"],
+              "pod_uid": run_metadata["pod_uid"],
+              "node_name": run_metadata["node_name"],
+              "experiment_reporting": {
+                  key: value
+                  for key, value in reporting.items()
+                  if key != "cycles"
+              },
+          }
+          if success_path.exists():
+              raise RuntimeError(
+                  f"Refusing to overwrite source success marker: {success_path}"
+              )
+          success_temp = success_path.with_name(".source_success.json.tmp")
+          success_temp.write_text(
+              json.dumps(success, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          os.replace(success_temp, success_path)
+          print(
+              "Phase 7 source checkpoint verified:",
+              f"path={checkpoint_path}",
+              f"size={checkpoint_path.stat().st_size}",
+              "format=1.0",
+              "initialization=cold",
+          )
+          PYVERIFY
+
+          echo "=== PHASE 7 SOURCE RUN COMPLETE ==="
+          cat "${SOURCE_SUCCESS}"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nrp-llm-token
+              key: NRP_LLM_TOKEN
+        - name: OPENAI_BASE_URL
+          value: https://ellm.nrp-nautilus.io/v1
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: PYTHONPATH
+          value: /work/python-bootstrap:/work/AutoInject/src:/work/AutoInject/agentdojo/src
+        - name: PATH
+          value: /opt/autoinject-venv/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        - name: PYTHONNOUSERSITE
+          value: "1"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: TMPDIR
+          value: /work/tmp
+        - name: XDG_CACHE_HOME
+          value: /work/cache
+        - name: TORCH_HOME
+          value: /work/cache/torch
+        - name: HF_HOME
+          value: /work/cache/huggingface
+        - name: HF_HUB_CACHE
+          value: /model-cache
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: TRANSFORMERS_OFFLINE
+          value: "1"
+        - name: HF_MODULES_CACHE
+          value: /work/cache/huggingface/modules
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"
+        resources:
+          requests:
+            cpu: "4"
+            memory: 48Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: "4"
+            memory: 48Gi
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: workspace
+          mountPath: /opt/autoinject-venv
+          subPath: AutoInject/.venv-autoinject
+          readOnly: true
+        - name: workspace
+          mountPath: /workspace/results
+          subPath: results
+        - name: workspace
+          mountPath: /model-cache
+          subPath: hf-cache
+          readOnly: true
+        - name: private-work
+          mountPath: /work
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace
+      - name: private-work
+        emptyDir:
+          sizeLimit: 64Gi

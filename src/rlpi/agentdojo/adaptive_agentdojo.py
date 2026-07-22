@@ -1,5 +1,6 @@
 import logging
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -90,6 +91,12 @@ def validate_checkpoint_initialization(cfg: DictConfig) -> None:
         )
 
 
+def _record_checkpoint_initialization(learner, provenance: Mapping) -> None:
+    record = dict(provenance)
+    learner.checkpoint_initialization_provenance = record
+    logger.info(f"Checkpoint initialization provenance: {record}")
+
+
 def initialize_learner_from_checkpoint(cfg: DictConfig, learner) -> None:
     """Apply the configured initialization mode to a constructed learner."""
     if not _uses_explicit_checkpoint_initialization(cfg):
@@ -97,6 +104,10 @@ def initialize_learner_from_checkpoint(cfg: DictConfig, learner) -> None:
 
     mode = cfg.initialization_mode
     if mode == "cold":
+        _record_checkpoint_initialization(
+            learner,
+            {"mode": "cold", "source_checkpoint_path": None},
+        )
         return
     if mode == "policy":
         loader = getattr(learner, "load_policy_weights_only", None)
@@ -106,6 +117,33 @@ def initialize_learner_from_checkpoint(cfg: DictConfig, learner) -> None:
                 "policy-only checkpoint initialization"
             )
         loader(cfg.source_checkpoint_path)
+        loader_provenance = getattr(
+            learner, "policy_initialization_provenance", None
+        )
+        if not isinstance(loader_provenance, Mapping):
+            raise RuntimeError(
+                "Policy-only checkpoint loader did not provide "
+                "initialization provenance"
+            )
+        loader_provenance = dict(loader_provenance)
+        _record_checkpoint_initialization(
+            learner,
+            {
+                "mode": "policy",
+                "source_checkpoint_path": str(
+                    Path(cfg.source_checkpoint_path).resolve()
+                ),
+                "policy_checkpoint_format_version": loader_provenance[
+                    "policy_checkpoint_format_version"
+                ],
+                "attack_model_name": loader_provenance[
+                    "attack_model_name"
+                ],
+                "policy_class": loader_provenance["policy_class"],
+                "model_type": loader_provenance.get("model_type"),
+                "dtype": loader_provenance["dtype"],
+            },
+        )
         return
 
     raise ValueError(

@@ -166,13 +166,27 @@ class CheckpointInitializationValidationTests(unittest.TestCase):
 
 
 class CheckpointInitializationDispatchTests(unittest.TestCase):
+    def _record_policy_loader_provenance(self, learner, path):
+        learner.policy_initialization_provenance = {
+            "source_checkpoint_path": str(path),
+            "policy_checkpoint_format_version": "1.0",
+            "attack_model_name": "tiny-attack-model",
+            "policy_class": "tests.TinyPolicy",
+            "model_type": "tiny-policy",
+            "dtype": "torch.float32",
+        }
+
     def _learner(self):
-        return SimpleNamespace(
+        learner = SimpleNamespace(
             load_policy_weights_only=MagicMock(),
             load_model=MagicMock(),
             modify_tasks=MagicMock(),
             update_scores=MagicMock(),
         )
+        learner.load_policy_weights_only.side_effect = lambda path: (
+            self._record_policy_loader_provenance(learner, path)
+        )
+        return learner
 
     def _run_config(self, mode, source_path, query_budget=0):
         return OmegaConf.create(
@@ -192,25 +206,77 @@ class CheckpointInitializationDispatchTests(unittest.TestCase):
     def test_cold_dispatch_calls_no_checkpoint_loader(self):
         learner = self._learner()
 
-        adaptive_agentdojo.initialize_learner_from_checkpoint(
-            self._run_config("cold", None), learner
-        )
+        with self.assertLogs(adaptive_agentdojo.logger, level="INFO"):
+            adaptive_agentdojo.initialize_learner_from_checkpoint(
+                self._run_config("cold", None), learner
+            )
 
         learner.load_policy_weights_only.assert_not_called()
         learner.load_model.assert_not_called()
+        self.assertEqual(
+            learner.checkpoint_initialization_provenance,
+            {"mode": "cold", "source_checkpoint_path": None},
+        )
+        json.dumps(learner.checkpoint_initialization_provenance)
 
     def test_policy_dispatch_loads_policy_exactly_once(self):
+        learner = self._learner()
+        checkpoint_path = "/checkpoints/source.pt"
+
+        with self.assertLogs(adaptive_agentdojo.logger, level="INFO"):
+            adaptive_agentdojo.initialize_learner_from_checkpoint(
+                self._run_config("policy", checkpoint_path), learner
+            )
+
+        learner.load_policy_weights_only.assert_called_once_with(
+            checkpoint_path
+        )
+        learner.load_model.assert_not_called()
+        self.assertEqual(
+            learner.checkpoint_initialization_provenance,
+            {
+                "mode": "policy",
+                "source_checkpoint_path": str(Path(checkpoint_path).resolve()),
+                "policy_checkpoint_format_version": "1.0",
+                "attack_model_name": "tiny-attack-model",
+                "policy_class": "tests.TinyPolicy",
+                "model_type": "tiny-policy",
+                "dtype": "torch.float32",
+            },
+        )
+        json.dumps(learner.checkpoint_initialization_provenance)
+
+    def test_policy_provenance_is_copied_from_loader_metadata(self):
         learner = self._learner()
         checkpoint_path = "/checkpoints/source.pt"
 
         adaptive_agentdojo.initialize_learner_from_checkpoint(
             self._run_config("policy", checkpoint_path), learner
         )
-
-        learner.load_policy_weights_only.assert_called_once_with(
-            checkpoint_path
+        recorded = dict(learner.checkpoint_initialization_provenance)
+        learner.policy_initialization_provenance["attack_model_name"] = (
+            "mutated"
         )
-        learner.load_model.assert_not_called()
+
+        self.assertEqual(
+            learner.checkpoint_initialization_provenance, recorded
+        )
+
+    def test_failed_policy_load_records_no_successful_provenance(self):
+        learner = self._learner()
+        learner.load_policy_weights_only.side_effect = RuntimeError(
+            "load failed"
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "load failed"):
+            adaptive_agentdojo.initialize_learner_from_checkpoint(
+                self._run_config("policy", "/checkpoints/source.pt"),
+                learner,
+            )
+
+        self.assertFalse(
+            hasattr(learner, "checkpoint_initialization_provenance")
+        )
 
     def test_unsupported_dispatch_mode_fails_clearly(self):
         learner = self._learner()
@@ -224,6 +290,9 @@ class CheckpointInitializationDispatchTests(unittest.TestCase):
 
         learner.load_policy_weights_only.assert_not_called()
         learner.load_model.assert_not_called()
+        self.assertFalse(
+            hasattr(learner, "checkpoint_initialization_provenance")
+        )
 
     def test_policy_dispatch_rejects_incompatible_learner(self):
         learner = SimpleNamespace(load_model=MagicMock())
@@ -237,6 +306,9 @@ class CheckpointInitializationDispatchTests(unittest.TestCase):
             )
 
         learner.load_model.assert_not_called()
+        self.assertFalse(
+            hasattr(learner, "checkpoint_initialization_provenance")
+        )
 
     def _assert_legacy_sidecar_is_bypassed(self, mode):
         learner = self._learner()
@@ -350,13 +422,18 @@ class CheckpointInitializationDispatchTests(unittest.TestCase):
 
         learner.load_model.assert_called_once_with(str(legacy_sidecar))
         learner.load_policy_weights_only.assert_not_called()
+        self.assertFalse(
+            hasattr(learner, "checkpoint_initialization_provenance")
+        )
 
     def test_initialization_finishes_before_controller_execution(self):
         events = []
         learner = self._learner()
-        learner.load_policy_weights_only.side_effect = lambda path: events.append(
-            "initialized"
-        )
+        def initialize_policy(path):
+            self._record_policy_loader_provenance(learner, path)
+            events.append("initialized")
+
+        learner.load_policy_weights_only.side_effect = initialize_policy
         learner.modify_tasks.side_effect = lambda **kwargs: events.append(
             "modify_tasks"
         )
@@ -668,6 +745,111 @@ class PolicyWeightsOnlyCheckpointTests(unittest.TestCase):
                 "model_type": "tiny-policy",
                 "dtype": "torch.float32",
             },
+        )
+        self.assertEqual(
+            set(checkpoint),
+            {
+                "policy_checkpoint_format_version",
+                "policy_state_dict",
+                "model_config",
+            },
+        )
+
+    def test_save_model_persists_checkpoint_initialization_provenance(self):
+        learner = self._learner()
+        caller_provenance = {
+            "mode": "policy",
+            "source_checkpoint_path": "/canonical/source.pt",
+            "policy_checkpoint_format_version": "1.0",
+            "attack_model_name": "tiny-attack-model",
+            "policy_class": "tests.TinyPolicy",
+            "model_type": "tiny-policy",
+            "dtype": "torch.float32",
+        }
+        learner.checkpoint_initialization_provenance = dict(
+            caller_provenance
+        )
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "checkpoint.pt"
+            learner.save_model(
+                str(path),
+                queries_used=23,
+                experiment_reporting={"victim_queries_total": 23},
+            )
+            caller_provenance["mode"] = "mutated"
+            with open(Path(directory) / "checkpoint_state.json") as state_file:
+                checkpoint_state = json.load(state_file)
+
+        self.assertEqual(
+            checkpoint_state["checkpoint_initialization"],
+            learner.checkpoint_initialization_provenance,
+        )
+        self.assertEqual(
+            set(checkpoint_state["checkpoint_initialization"]),
+            {
+                "mode",
+                "source_checkpoint_path",
+                "policy_checkpoint_format_version",
+                "attack_model_name",
+                "policy_class",
+                "model_type",
+                "dtype",
+            },
+        )
+        json.dumps(checkpoint_state["checkpoint_initialization"])
+        self.assertEqual(checkpoint_state["checkpoint_version"], "1.0")
+        self.assertEqual(
+            checkpoint_state["learner_state"],
+            {
+                "experience_count": 9,
+                "training_count": 4,
+                "best_suffix": "keep-best-suffix",
+                "best_reward": 0.75,
+                "early_stopped": True,
+                "queries_used": 23,
+            },
+        )
+        self.assertEqual(
+            checkpoint_state["model_info"],
+            {
+                "attack_model_name": "tiny-attack-model",
+                "checkpoint_path": str(path),
+            },
+        )
+        self.assertEqual(
+            checkpoint_state["config_snapshot"],
+            {
+                "max_suffix_length": 20,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "grpo_num_generations": 2,
+                "grpo_num_iterations": 1,
+                "grpo_learning_rate": 1e-7,
+                "min_experiences_for_training": 2,
+            },
+        )
+        self.assertEqual(
+            checkpoint_state["experiment_reporting"],
+            {"victim_queries_total": 23},
+        )
+
+    def test_save_model_persists_explicit_cold_provenance(self):
+        learner = self._learner()
+        learner.checkpoint_initialization_provenance = {
+            "mode": "cold",
+            "source_checkpoint_path": None,
+        }
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "checkpoint.pt"
+            learner.save_model(str(path))
+            with open(Path(directory) / "checkpoint_state.json") as state_file:
+                checkpoint_state = json.load(state_file)
+
+        self.assertEqual(
+            checkpoint_state["checkpoint_initialization"],
+            {"mode": "cold", "source_checkpoint_path": None},
         )
 
     def test_missing_policy_state_dict_fails_transactionally(self):

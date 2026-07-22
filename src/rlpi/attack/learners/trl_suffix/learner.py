@@ -928,6 +928,13 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
             },
             "experiment_reporting": experiment_reporting or {},
         }
+        checkpoint_initialization = getattr(
+            self, "checkpoint_initialization_provenance", None
+        )
+        if checkpoint_initialization is not None:
+            checkpoint_state["checkpoint_initialization"] = dict(
+                checkpoint_initialization
+            )
 
         with open(state_path, "w") as f:
             json.dump(checkpoint_state, f, indent=2)

@@ -29,8 +29,22 @@ from rlpi.attack.utils import set_seed
 logger = logging.getLogger(__name__)
 
 
+def _uses_explicit_checkpoint_initialization(cfg: DictConfig) -> bool:
+    has_mode = "initialization_mode" in cfg
+    has_source_path = "source_checkpoint_path" in cfg
+    if has_mode != has_source_path:
+        raise ValueError(
+            "initialization_mode and source_checkpoint_path must either "
+            "both be present or both be absent"
+        )
+    return has_mode
+
+
 def validate_checkpoint_initialization(cfg: DictConfig) -> None:
     """Validate checkpoint initialization settings before experiment setup."""
+    if not _uses_explicit_checkpoint_initialization(cfg):
+        return
+
     mode = cfg.initialization_mode
     source_path = cfg.source_checkpoint_path
 
@@ -74,6 +88,29 @@ def validate_checkpoint_initialization(cfg: DictConfig) -> None:
         raise ValueError(
             f"source_checkpoint_path must be non-empty: {checkpoint_path}"
         )
+
+
+def initialize_learner_from_checkpoint(cfg: DictConfig, learner) -> None:
+    """Apply the configured initialization mode to a constructed learner."""
+    if not _uses_explicit_checkpoint_initialization(cfg):
+        return
+
+    mode = cfg.initialization_mode
+    if mode == "cold":
+        return
+    if mode == "policy":
+        loader = getattr(learner, "load_policy_weights_only", None)
+        if not callable(loader):
+            raise TypeError(
+                f"Learner {type(learner).__name__} does not support "
+                "policy-only checkpoint initialization"
+            )
+        loader(cfg.source_checkpoint_path)
+        return
+
+    raise ValueError(
+        f"Unsupported initialization_mode {mode!r}; expected 'cold' or 'policy'"
+    )
 
 
 def _find_latest_checkpoint(logdir: Path) -> Optional[Path]:
@@ -196,13 +233,21 @@ def run_adaptive_attack(
                 f"Please specify a single injection task in your configuration."
             )
 
-    # Check for existing checkpoint to resume from
-    latest_checkpoint = _find_latest_checkpoint(logdir)
+    # Explicit cold/policy initialization bypasses automatic legacy resume.
+    legacy_resume_enabled = not _uses_explicit_checkpoint_initialization(cfg)
+    latest_checkpoint = (
+        _find_latest_checkpoint(logdir) if legacy_resume_enabled else None
+    )
     queries_used = 0
     iteration = 0
     early_stop_triggered = False
 
-    if latest_checkpoint is not None and hasattr(learner, "load_model"):
+    if not legacy_resume_enabled:
+        logger.info(
+            "Explicit checkpoint initialization selected; "
+            "bypassing automatic legacy resume"
+        )
+    elif latest_checkpoint is not None and hasattr(learner, "load_model"):
         logger.info(
             f"Found checkpoint: {latest_checkpoint}, attempting to resume..."
         )
@@ -425,6 +470,7 @@ def _setup_pipeline_and_components(
         suite=suite,
         **learner_params,
     )
+    initialize_learner_from_checkpoint(cfg, learner)
 
     if hasattr(learner, "set_experiment_reporting"):
         learner.set_experiment_reporting(experiment_reporting)

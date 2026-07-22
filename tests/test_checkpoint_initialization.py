@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import torch
 from omegaconf import OmegaConf
@@ -35,6 +35,23 @@ class CheckpointInitializationValidationTests(unittest.TestCase):
         adaptive_agentdojo.validate_checkpoint_initialization(
             self._config("cold", None)
         )
+
+    def test_legacy_config_with_both_fields_absent_passes(self):
+        adaptive_agentdojo.validate_checkpoint_initialization(
+            OmegaConf.create({})
+        )
+
+    def test_initialization_mode_without_source_path_fails(self):
+        with self.assertRaisesRegex(ValueError, "both be present or both"):
+            adaptive_agentdojo.validate_checkpoint_initialization(
+                OmegaConf.create({"initialization_mode": "cold"})
+            )
+
+    def test_source_path_without_initialization_mode_fails(self):
+        with self.assertRaisesRegex(ValueError, "both be present or both"):
+            adaptive_agentdojo.validate_checkpoint_initialization(
+                OmegaConf.create({"source_checkpoint_path": None})
+            )
 
     def test_cold_with_non_null_path_fails(self):
         with self.assertRaisesRegex(ValueError, "cold.*must be null"):
@@ -146,6 +163,259 @@ class CheckpointInitializationValidationTests(unittest.TestCase):
         get_attack_learner.assert_not_called()
         evaluate_victim.assert_not_called()
         run_adaptive_attack.assert_not_called()
+
+
+class CheckpointInitializationDispatchTests(unittest.TestCase):
+    def _learner(self):
+        return SimpleNamespace(
+            load_policy_weights_only=MagicMock(),
+            load_model=MagicMock(),
+            modify_tasks=MagicMock(),
+            update_scores=MagicMock(),
+        )
+
+    def _run_config(self, mode, source_path, query_budget=0):
+        return OmegaConf.create(
+            {
+                "initialization_mode": mode,
+                "source_checkpoint_path": source_path,
+                "query_budget": query_budget,
+                "attack": "direct",
+                "defense": None,
+                "system_message": None,
+                "model": "test-model",
+                "max_tokens": None,
+                "learner": {"type": "test"},
+            }
+        )
+
+    def test_cold_dispatch_calls_no_checkpoint_loader(self):
+        learner = self._learner()
+
+        adaptive_agentdojo.initialize_learner_from_checkpoint(
+            self._run_config("cold", None), learner
+        )
+
+        learner.load_policy_weights_only.assert_not_called()
+        learner.load_model.assert_not_called()
+
+    def test_policy_dispatch_loads_policy_exactly_once(self):
+        learner = self._learner()
+        checkpoint_path = "/checkpoints/source.pt"
+
+        adaptive_agentdojo.initialize_learner_from_checkpoint(
+            self._run_config("policy", checkpoint_path), learner
+        )
+
+        learner.load_policy_weights_only.assert_called_once_with(
+            checkpoint_path
+        )
+        learner.load_model.assert_not_called()
+
+    def test_unsupported_dispatch_mode_fails_clearly(self):
+        learner = self._learner()
+
+        with self.assertRaisesRegex(
+            ValueError, "Unsupported initialization_mode"
+        ):
+            adaptive_agentdojo.initialize_learner_from_checkpoint(
+                self._run_config("full", None), learner
+            )
+
+        learner.load_policy_weights_only.assert_not_called()
+        learner.load_model.assert_not_called()
+
+    def test_policy_dispatch_rejects_incompatible_learner(self):
+        learner = SimpleNamespace(load_model=MagicMock())
+
+        with self.assertRaisesRegex(
+            TypeError, "does not support policy-only checkpoint initialization"
+        ):
+            adaptive_agentdojo.initialize_learner_from_checkpoint(
+                self._run_config("policy", "/checkpoints/source.pt"),
+                learner,
+            )
+
+        learner.load_model.assert_not_called()
+
+    def _assert_legacy_sidecar_is_bypassed(self, mode):
+        learner = self._learner()
+        with TemporaryDirectory() as directory:
+            checkpoint_path = Path(directory) / "source.pt"
+            checkpoint_path.write_bytes(b"checkpoint")
+            legacy_sidecar = Path(directory) / "checkpoint_state.json"
+            legacy_sidecar.write_text("not valid json")
+            cfg = self._run_config(
+                mode,
+                str(checkpoint_path) if mode == "policy" else None,
+            )
+
+            with (
+                patch.object(
+                    adaptive_agentdojo,
+                    "get_user_tasks",
+                    return_value=[],
+                ),
+                patch.object(
+                    adaptive_agentdojo,
+                    "get_wrapped_injection_tasks",
+                    return_value={},
+                ),
+                patch.object(
+                    adaptive_agentdojo,
+                    "setup_pipeline_and_attacker",
+                    return_value=(object(), object()),
+                ),
+                patch.object(
+                    adaptive_agentdojo,
+                    "get_attack_learner",
+                    return_value=learner,
+                ),
+                patch.object(
+                    adaptive_agentdojo,
+                    "_find_latest_checkpoint",
+                    side_effect=AssertionError(
+                        "explicit initialization searched for legacy checkpoint"
+                    ),
+                ) as find_latest_checkpoint,
+                patch.object(adaptive_agentdojo, "_save_checkpoint"),
+            ):
+                adaptive_agentdojo.run_adaptive_attack(
+                    cfg=cfg,
+                    suite=object(),
+                    model=object(),
+                    logdir=Path(directory),
+                )
+
+        learner.load_model.assert_not_called()
+        find_latest_checkpoint.assert_not_called()
+        if mode == "policy":
+            learner.load_policy_weights_only.assert_called_once_with(
+                str(checkpoint_path)
+            )
+        else:
+            learner.load_policy_weights_only.assert_not_called()
+
+    def test_cold_mode_bypasses_existing_legacy_sidecar(self):
+        self._assert_legacy_sidecar_is_bypassed("cold")
+
+    def test_policy_mode_bypasses_existing_legacy_sidecar(self):
+        self._assert_legacy_sidecar_is_bypassed("policy")
+
+    def test_missing_initialization_fields_use_legacy_resume(self):
+        learner = self._learner()
+        cfg = self._run_config("cold", None)
+        del cfg.initialization_mode
+        del cfg.source_checkpoint_path
+
+        with TemporaryDirectory() as directory:
+            legacy_sidecar = Path(directory) / "checkpoint_state.json"
+            legacy_sidecar.write_text(
+                json.dumps(
+                    {
+                        "checkpoint_version": "1.0",
+                        "learner_state": {"queries_used": 0},
+                    }
+                )
+            )
+
+            with (
+                patch.object(
+                    adaptive_agentdojo,
+                    "get_user_tasks",
+                    return_value=[],
+                ),
+                patch.object(
+                    adaptive_agentdojo,
+                    "get_wrapped_injection_tasks",
+                    return_value={},
+                ),
+                patch.object(
+                    adaptive_agentdojo,
+                    "setup_pipeline_and_attacker",
+                    return_value=(object(), object()),
+                ),
+                patch.object(
+                    adaptive_agentdojo,
+                    "get_attack_learner",
+                    return_value=learner,
+                ),
+            ):
+                adaptive_agentdojo.run_adaptive_attack(
+                    cfg=cfg,
+                    suite=object(),
+                    model=object(),
+                    logdir=Path(directory),
+                )
+
+        learner.load_model.assert_called_once_with(str(legacy_sidecar))
+        learner.load_policy_weights_only.assert_not_called()
+
+    def test_initialization_finishes_before_controller_execution(self):
+        events = []
+        learner = self._learner()
+        learner.load_policy_weights_only.side_effect = lambda path: events.append(
+            "initialized"
+        )
+        learner.modify_tasks.side_effect = lambda **kwargs: events.append(
+            "modify_tasks"
+        )
+        user_task = SimpleNamespace(PROMPT="user prompt")
+        cfg = self._run_config("policy", "/checkpoints/source.pt", 1)
+
+        def construct_learner(**kwargs):
+            events.append("constructed")
+            return learner
+
+        def run_controller(**kwargs):
+            events.append("controller")
+            return {}, {}
+
+        with (
+            patch.object(
+                adaptive_agentdojo,
+                "get_user_tasks",
+                return_value=[user_task],
+            ),
+            patch.object(
+                adaptive_agentdojo,
+                "get_wrapped_injection_tasks",
+                return_value={"injection": object()},
+            ),
+            patch.object(
+                adaptive_agentdojo,
+                "setup_pipeline_and_attacker",
+                return_value=(object(), object()),
+            ),
+            patch.object(
+                adaptive_agentdojo,
+                "get_attack_learner",
+                side_effect=construct_learner,
+            ),
+            patch.object(
+                adaptive_agentdojo,
+                "_run_benchmarks",
+                side_effect=run_controller,
+            ),
+            patch.object(
+                adaptive_agentdojo,
+                "calculate_average_scores",
+                return_value=(0.0, 0.0),
+            ),
+            patch.object(adaptive_agentdojo, "_save_checkpoint"),
+        ):
+            adaptive_agentdojo.run_adaptive_attack(
+                cfg=cfg,
+                suite=object(),
+                model=object(),
+                logdir=Path("/unused"),
+            )
+
+        self.assertEqual(
+            events,
+            ["constructed", "initialized", "modify_tasks", "controller"],
+        )
+        learner.load_model.assert_not_called()
 
 
 class PolicyWeightsOnlyCheckpointTests(unittest.TestCase):

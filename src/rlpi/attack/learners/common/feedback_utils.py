@@ -8,6 +8,7 @@ empirical scores (security, utility) with GPT feedback.
 
 import logging
 import os
+import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import numpy as np
@@ -15,6 +16,11 @@ import numpy as np
 from agentdojo.models import MODEL_PROVIDERS, ModelsEnum
 
 logger = logging.getLogger("FeedbackUtils")
+
+DEFAULT_FEEDBACK_MAX_RETRY_SECONDS = 900.0
+FEEDBACK_RETRY_INITIAL_DELAY_SECONDS = 1.0
+FEEDBACK_RETRY_MAX_DELAY_SECONDS = 30.0
+TRANSIENT_FEEDBACK_STATUS_CODES = {429, 500, 502, 503, 504}
 
 try:
     import openai
@@ -103,6 +109,85 @@ def _get_openai_request_options(model: str) -> Dict[str, Any]:
     return {}
 
 
+def _get_feedback_max_retry_seconds() -> float:
+    value = os.environ.get(
+        "AUTOINJECT_FEEDBACK_MAX_RETRY_SECONDS",
+        str(DEFAULT_FEEDBACK_MAX_RETRY_SECONDS),
+    )
+    max_retry_seconds = float(value)
+    if not np.isfinite(max_retry_seconds) or max_retry_seconds < 0:
+        raise ValueError(
+            "AUTOINJECT_FEEDBACK_MAX_RETRY_SECONDS must be a finite, "
+            "non-negative number"
+        )
+    return max_retry_seconds
+
+
+def _is_transient_feedback_error(exc: Exception) -> bool:
+    if getattr(exc, "status_code", None) in TRANSIENT_FEEDBACK_STATUS_CODES:
+        return True
+
+    connection_error_types = tuple(
+        error_type
+        for error_type in (
+            getattr(openai, "APIConnectionError", None),
+            getattr(openai, "APITimeoutError", None),
+        )
+        if isinstance(error_type, type)
+    )
+    return isinstance(
+        exc, connection_error_types + (ConnectionError, TimeoutError)
+    )
+
+
+def _create_openai_completion_with_retry(
+    create: Callable[..., Any],
+    request_options: Dict[str, Any],
+) -> Any:
+    max_retry_seconds = _get_feedback_max_retry_seconds()
+    deadline = time.monotonic() + max_retry_seconds
+    delay = FEEDBACK_RETRY_INITIAL_DELAY_SECONDS
+    attempt = 1
+
+    while True:
+        try:
+            return create(**request_options)
+        except Exception as exc:
+            if not _is_transient_feedback_error(exc):
+                raise
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise
+
+            sleep_seconds = min(
+                delay, FEEDBACK_RETRY_MAX_DELAY_SECONDS, remaining
+            )
+            logger.warning(
+                "Transient feedback request failure on attempt %d; "
+                "retrying in %.1f seconds (%.1f seconds remain): %s",
+                attempt,
+                sleep_seconds,
+                remaining,
+                exc,
+            )
+            time.sleep(sleep_seconds)
+            delay = min(delay * 2, FEEDBACK_RETRY_MAX_DELAY_SECONDS)
+            attempt += 1
+
+
+def _validate_comparison_probabilities(
+    prob_1: float, prob_0: float
+) -> None:
+    if not np.isfinite(prob_1) or not np.isfinite(prob_0):
+        raise ValueError(
+            f"Feedback returned non-finite probabilities: "
+            f"prob_1={prob_1}, prob_0={prob_0}"
+        )
+    if prob_1 == 0.0 and prob_0 == 0.0:
+        raise ValueError("Feedback returned unusable zero/zero probabilities")
+
+
 def _compare_with_openai(
     prompt: str,
     model: str,
@@ -110,22 +195,25 @@ def _compare_with_openai(
     on_model_call: Optional[Callable[[], None]] = None,
 ) -> Tuple[float, float, bool, str]:
     if not HAS_OPENAI:
-        if verbose:
-            logger.warning("OpenAI not available, returning neutral score")
-        return 0.0, 0.0, False, ""
+        raise RuntimeError("OpenAI feedback requested but openai is unavailable")
 
-    client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    client = openai.OpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"), max_retries=0
+    )
 
     if on_model_call is not None:
         on_model_call()
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.0,
-        max_tokens=350,  # Reduced to ensure completion
-        logprobs=True,
-        top_logprobs=5,
-        **_get_openai_request_options(model),
+    response = _create_openai_completion_with_retry(
+        client.chat.completions.create,
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.0,
+            "max_tokens": 350,  # Reduced to ensure completion
+            "logprobs": True,
+            "top_logprobs": 5,
+            **_get_openai_request_options(model),
+        },
     )
 
     # Extract full response text
@@ -204,6 +292,8 @@ def _compare_with_openai(
             logger.warning(
                 f"Could not extract logprobs, using binary answer: {binary_answer}"
             )
+
+    _validate_comparison_probabilities(float(prob_1), float(prob_0))
 
     if verbose:
         prob_0_str = f"{prob_0:.3f}" if logprob_0 is not None else "N/A"

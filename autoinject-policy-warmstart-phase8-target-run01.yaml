@@ -12,7 +12,7 @@ spec:
   completions: 2
   parallelism: 1
   backoffLimit: 0
-  activeDeadlineSeconds: 259200
+  activeDeadlineSeconds: 604800
   template:
     metadata:
       labels:
@@ -377,7 +377,7 @@ spec:
               "global_seed": 1,
               "learner_seed": 42,
               "query_budget": 65,
-              "grpo_num_generations": 64,
+              "grpo_num_generations": 8,
               "target_initial_queries": 0,
               "policy_weights_transferred": sys.argv[7] == "policy",
               "fresh_target_state": [
@@ -417,7 +417,7 @@ spec:
           echo "global_seed: 1"
           echo "learner_seed: 42"
           echo "query_budget: 65"
-          echo "grpo_num_generations: 64"
+          echo "grpo_num_generations: 8"
           echo "initialization_mode: ${INITIALIZATION_MODE}"
           echo "source_checkpoint_path: ${SOURCE_CHECKPOINT_ARG}"
           nvidia-smi
@@ -434,7 +434,7 @@ spec:
             learner=trl_suffix_meta_secalign_repro
             learner.seed=42
             learner.min_experiences_for_training=1
-            learner.grpo_num_generations=64
+            learner.grpo_num_generations=8
             learner.grpo_num_iterations=5
             learner.max_suffix_length=30
             +learner.feedback_model=gemma-small
@@ -522,8 +522,8 @@ spec:
           config = state.get("config_snapshot")
           if not isinstance(config, Mapping):
               raise ValueError("Target checkpoint config snapshot is missing")
-          if int(config.get("grpo_num_generations", -1)) != 64:
-              raise ValueError("Target GRPO generation count is not 64")
+          if int(config.get("grpo_num_generations", -1)) != 8:
+              raise ValueError("Target GRPO generation count is not 8")
 
           learner = state.get("learner_state")
           if not isinstance(learner, Mapping):

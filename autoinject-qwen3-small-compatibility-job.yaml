@@ -24,8 +24,8 @@ spec:
               value: https://ellm.nrp-nautilus.io/v1
           resources:
             requests:
-              cpu: 50m
-              memory: 96Mi
+              cpu: 500m
+              memory: 256Mi
             limits:
               cpu: 500m
               memory: 256Mi

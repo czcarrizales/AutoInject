@@ -417,6 +417,16 @@ def _get_gpt_score_if_enabled(
         preloaded_model=preloaded_model,
         preloaded_tokenizer=preloaded_tokenizer,
         on_model_call=on_feedback_model_call,
+        feedback_reasoning_enabled=gpt_config.get(
+            "feedback_reasoning_enabled"
+        ),
+        feedback_strict_logprob_extraction=gpt_config.get(
+            "feedback_strict_logprob_extraction", False
+        ),
+        feedback_logprobs=gpt_config.get("feedback_logprobs", True),
+        feedback_top_logprobs=gpt_config.get(
+            "feedback_top_logprobs", 5
+        ),
     )
     return (
         prob_1,

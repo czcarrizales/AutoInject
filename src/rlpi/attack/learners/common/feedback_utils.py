@@ -8,6 +8,7 @@ empirical scores (security, utility) with GPT feedback.
 
 import logging
 import os
+import re
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -21,6 +22,7 @@ DEFAULT_FEEDBACK_MAX_RETRY_SECONDS = 900.0
 FEEDBACK_RETRY_INITIAL_DELAY_SECONDS = 1.0
 FEEDBACK_RETRY_MAX_DELAY_SECONDS = 30.0
 TRANSIENT_FEEDBACK_STATUS_CODES = {429, 500, 502, 503, 504}
+STRICT_ANSWER_PATTERN = re.compile(r"^Answer:\s*([01])\s*$")
 
 try:
     import openai
@@ -99,7 +101,25 @@ Where:
 Begin your analysis:"""
 
 
-def _get_openai_request_options(model: str) -> Dict[str, Any]:
+class FeedbackValidationError(ValueError):
+    """Raised when a hosted feedback response cannot be validated."""
+
+
+class FeedbackConfigurationError(ValueError):
+    """Raised when hosted feedback request settings are invalid."""
+
+
+def _get_openai_request_options(
+    model: str, feedback_reasoning_enabled: Optional[bool] = None
+) -> Dict[str, Any]:
+    if feedback_reasoning_enabled is not None:
+        return {
+            "extra_body": {
+                "chat_template_kwargs": {
+                    "enable_thinking": feedback_reasoning_enabled
+                }
+            }
+        }
     if model == "gemma-small":
         return {
             "extra_body": {
@@ -188,14 +208,184 @@ def _validate_comparison_probabilities(
         raise ValueError("Feedback returned unusable zero/zero probabilities")
 
 
+def _get_response_choice(response: Any) -> Any:
+    choices = getattr(response, "choices", None)
+    if not choices:
+        raise FeedbackValidationError(
+            "Hosted feedback response contained no choices"
+        )
+    return choices[0]
+
+
+def _extract_response_content(choice: Any) -> str:
+    message = getattr(choice, "message", None)
+    content = getattr(message, "content", None)
+    if content is None:
+        raise FeedbackValidationError(
+            "Hosted feedback response message.content is None"
+        )
+    return content
+
+
+def _strict_extract_openai_comparison(
+    choice: Any, full_response: str
+) -> Tuple[float, float, bool, str, float, float, str]:
+    lines = full_response.splitlines()
+    if not lines:
+        raise FeedbackValidationError(
+            "Strict hosted feedback response is empty"
+        )
+
+    answer_match = STRICT_ANSWER_PATTERN.fullmatch(lines[-1])
+    if answer_match is None:
+        raise FeedbackValidationError(
+            "Strict hosted feedback final line must match "
+            r"^Answer:\s*([01])\s*$"
+        )
+    binary_answer = answer_match.group(1)
+    reasoning = "\n".join(lines[:-1]).strip()
+
+    choice_logprobs = getattr(choice, "logprobs", None)
+    if choice_logprobs is None:
+        raise FeedbackValidationError(
+            "Strict hosted feedback choice.logprobs is missing"
+        )
+    logprobs_content = getattr(choice_logprobs, "content", None)
+    if not logprobs_content:
+        raise FeedbackValidationError(
+            "Strict hosted feedback choice.logprobs.content is empty"
+        )
+
+    answer_position = None
+    for token_data in reversed(logprobs_content[-20:]):
+        emitted_token = getattr(token_data, "token", None)
+        if (
+            emitted_token is not None
+            and emitted_token.strip() == binary_answer
+        ):
+            answer_position = token_data
+            break
+    if answer_position is None:
+        raise FeedbackValidationError(
+            "Strict hosted feedback answer digit token was not found near "
+            "the end of the completion"
+        )
+
+    digit_logprobs: Dict[str, float] = {}
+    for alternative in getattr(answer_position, "top_logprobs", None) or []:
+        token = getattr(alternative, "token", None)
+        logprob = getattr(alternative, "logprob", None)
+        if token is None or logprob is None:
+            continue
+        normalized_token = token.strip()
+        if normalized_token in {"0", "1"}:
+            try:
+                numeric_logprob = float(logprob)
+            except (TypeError, ValueError) as exc:
+                raise FeedbackValidationError(
+                    "Strict hosted feedback digit logprobs must be numeric"
+                ) from exc
+            if not np.isfinite(numeric_logprob):
+                raise FeedbackValidationError(
+                    "Strict hosted feedback digit logprobs must be finite"
+                )
+            previous_logprob = digit_logprobs.get(normalized_token)
+            if (
+                previous_logprob is None
+                or numeric_logprob > previous_logprob
+            ):
+                digit_logprobs[normalized_token] = numeric_logprob
+
+    emitted_logprob = getattr(answer_position, "logprob", None)
+    emitted_token = getattr(answer_position, "token", None)
+    if emitted_logprob is not None and emitted_token is not None:
+        normalized_token = emitted_token.strip()
+        if normalized_token in {"0", "1"}:
+            try:
+                numeric_logprob = float(emitted_logprob)
+            except (TypeError, ValueError) as exc:
+                raise FeedbackValidationError(
+                    "Strict hosted feedback digit logprobs must be numeric"
+                ) from exc
+            if not np.isfinite(numeric_logprob):
+                raise FeedbackValidationError(
+                    "Strict hosted feedback digit logprobs must be finite"
+                )
+            previous_logprob = digit_logprobs.get(normalized_token)
+            if (
+                previous_logprob is None
+                or numeric_logprob > previous_logprob
+            ):
+                digit_logprobs[normalized_token] = numeric_logprob
+
+    if "0" not in digit_logprobs or "1" not in digit_logprobs:
+        raise FeedbackValidationError(
+            "Strict hosted feedback requires logprobs for both digit 0 and "
+            "digit 1 at the emitted answer position"
+        )
+
+    logprob_0 = digit_logprobs["0"]
+    logprob_1 = digit_logprobs["1"]
+    maximum = max(logprob_0, logprob_1)
+    weight_0 = float(np.exp(logprob_0 - maximum))
+    weight_1 = float(np.exp(logprob_1 - maximum))
+    denominator = weight_0 + weight_1
+    if not np.isfinite(denominator) or denominator <= 0.0:
+        raise FeedbackValidationError(
+            "Strict hosted feedback softmax denominator must be finite and "
+            "positive"
+        )
+
+    prob_0 = weight_0 / denominator
+    prob_1 = weight_1 / denominator
+    if not np.isfinite(prob_0) or not np.isfinite(prob_1):
+        raise FeedbackValidationError(
+            "Strict hosted feedback probabilities must be finite"
+        )
+    if not np.isclose(prob_0 + prob_1, 1.0):
+        raise FeedbackValidationError(
+            "Strict hosted feedback probabilities must sum to 1"
+        )
+    _validate_comparison_probabilities(prob_1, prob_0)
+
+    return (
+        prob_1,
+        prob_0,
+        prob_1 > prob_0,
+        reasoning,
+        logprob_0,
+        logprob_1,
+        binary_answer,
+    )
+
+
 def _compare_with_openai(
     prompt: str,
     model: str,
     verbose: bool,
     on_model_call: Optional[Callable[[], None]] = None,
+    feedback_reasoning_enabled: Optional[bool] = None,
+    feedback_strict_logprob_extraction: bool = False,
+    feedback_logprobs: bool = True,
+    feedback_top_logprobs: int = 5,
 ) -> Tuple[float, float, bool, str]:
     if not HAS_OPENAI:
         raise RuntimeError("OpenAI feedback requested but openai is unavailable")
+
+    if feedback_strict_logprob_extraction:
+        if feedback_logprobs is not True:
+            raise FeedbackConfigurationError(
+                "Strict hosted feedback requires feedback_logprobs=True"
+            )
+        if (
+            not isinstance(feedback_top_logprobs, int)
+            or isinstance(feedback_top_logprobs, bool)
+            or feedback_top_logprobs < 2
+        ):
+            raise FeedbackConfigurationError(
+                "Strict hosted feedback requires "
+                "feedback_top_logprobs to be an integer of at least 2"
+            )
 
     client = openai.OpenAI(
         api_key=os.environ.get("OPENAI_API_KEY"), max_retries=0
@@ -210,14 +400,37 @@ def _compare_with_openai(
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.0,
             "max_tokens": 350,  # Reduced to ensure completion
-            "logprobs": True,
-            "top_logprobs": 5,
-            **_get_openai_request_options(model),
+            "logprobs": feedback_logprobs,
+            "top_logprobs": feedback_top_logprobs,
+            **_get_openai_request_options(
+                model, feedback_reasoning_enabled
+            ),
         },
     )
 
-    # Extract full response text
-    full_response = response.choices[0].message.content.strip()
+    choice = _get_response_choice(response)
+    response_content = _extract_response_content(choice)
+
+    if feedback_strict_logprob_extraction:
+        (
+            prob_1,
+            prob_0,
+            is_better,
+            reasoning,
+            logprob_0,
+            logprob_1,
+            binary_answer,
+        ) = _strict_extract_openai_comparison(choice, response_content)
+        if verbose:
+            logger.info(
+                f"Comparison: "
+                f"{'NEW MORE EFFECTIVE' if is_better else 'PREVIOUS MORE EFFECTIVE'} "
+                f"(prob_1={prob_1:.3f}, prob_0={prob_0:.3f}) "
+                f"Binary: {binary_answer}"
+            )
+        return float(prob_1), float(prob_0), is_better, reasoning
+
+    full_response = response_content.strip()
 
     # Find the last "Answer: X" pattern
     lines = full_response.split("\n")
@@ -245,7 +458,10 @@ def _compare_with_openai(
             binary_answer = "1"
 
     # Extract logprobs for tokens "0" and "1" from LAST token
-    logprobs_content_list = response.choices[0].logprobs.content
+    choice_logprobs = getattr(choice, "logprobs", None)
+    logprobs_content_list = (
+        getattr(choice_logprobs, "content", None) or []
+    )
 
     logprob_0 = None
     logprob_1 = None
@@ -495,6 +711,10 @@ def compare_suffix_with_previous(
     preloaded_model: Optional[Any] = None,
     preloaded_tokenizer: Optional[Any] = None,
     on_model_call: Optional[Callable[[], None]] = None,
+    feedback_reasoning_enabled: Optional[bool] = None,
+    feedback_strict_logprob_extraction: bool = False,
+    feedback_logprobs: bool = True,
+    feedback_top_logprobs: int = 5,
 ) -> Tuple[float, float, bool, str]:
     """Compare current suffix with previous best using logprob-based scoring."""
     prompt = _build_comparison_prompt(
@@ -520,6 +740,12 @@ def compare_suffix_with_previous(
         model=model,
         verbose=verbose,
         on_model_call=on_model_call,
+        feedback_reasoning_enabled=feedback_reasoning_enabled,
+        feedback_strict_logprob_extraction=(
+            feedback_strict_logprob_extraction
+        ),
+        feedback_logprobs=feedback_logprobs,
+        feedback_top_logprobs=feedback_top_logprobs,
     )
 
 
@@ -616,6 +842,16 @@ def compute_gpt_feedback_for_iteration(
             model=gpt_config["model"],
             verbose=verbose,
             on_model_call=on_model_call,
+            feedback_reasoning_enabled=gpt_config.get(
+                "feedback_reasoning_enabled"
+            ),
+            feedback_strict_logprob_extraction=gpt_config.get(
+                "feedback_strict_logprob_extraction", False
+            ),
+            feedback_logprobs=gpt_config.get("feedback_logprobs", True),
+            feedback_top_logprobs=gpt_config.get(
+                "feedback_top_logprobs", 5
+            ),
         )
         return prob_1, prob_0, is_better, reasoning
     else:

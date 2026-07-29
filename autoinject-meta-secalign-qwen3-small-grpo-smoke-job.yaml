@@ -1,0 +1,648 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-meta-secalign-qwen3-small-grpo-smoke
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: autoinject-qwen3-small
+    app.kubernetes.io/instance: qwen3-small-grpo-smoke
+    autoinject-feedback-model: qwen3-small
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 604800
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject-qwen3-small
+        app.kubernetes.io/instance: qwen3-small-grpo-smoke
+        autoinject-feedback-model: qwen3-small
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-A100-80GB-PCIe
+                - NVIDIA-A100-PCIE-40GB
+                - NVIDIA-A100-SXM4-80GB
+                - NVIDIA-A40
+                - NVIDIA-GH200-480GB
+                - NVIDIA-H100-80GB-HBM3
+                - NVIDIA-H200-NVL
+                - NVIDIA-L40
+                - NVIDIA-L40S
+                - NVIDIA-RTX-A6000
+                - NVIDIA-RTX-PRO-6000-Blackwell-Max-Q-Workstation-Edition
+                - Quadro-RTX-8000
+      containers:
+      - name: autoinject-qwen3-small
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        command: ["bash", "-lc"]
+        args:
+        - |
+          set -Eeuo pipefail
+
+          readonly EXPECTED_COMMIT="c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7"
+          readonly SOURCE_REPOSITORY="https://github.com/czcarrizales/AutoInject"
+          readonly SOURCE_BRANCH="experiments/qwen3-small-baseline-v1"
+          readonly SHARED_REPO="/workspace/AutoInject"
+          readonly PRIVATE_REPO="/work/AutoInject"
+          readonly RESULT_BASE="/workspace/results/autoinject-qwen3-small/grpo-smoke"
+          readonly RUN_ID="qwen3-small-$(date -u +%Y%m%dT%H%M%S)-${POD_UID}"
+          readonly RESULT_ROOT="${RESULT_BASE}/${RUN_ID}"
+          readonly RUN_DIR="${RESULT_ROOT}/run"
+          readonly JOB_LOG="${RESULT_ROOT}/qwen3-small-job.log"
+          readonly SUCCESS_JSON="${RESULT_ROOT}/qwen3-small-success.json"
+          readonly START_EPOCH="$(date +%s)"
+
+          mkdir -p "${RESULT_BASE}"
+          if ! mkdir "${RESULT_ROOT}"; then
+            echo "Refusing to reuse qwen3-small result directory: ${RESULT_ROOT}" >&2
+            exit 64
+          fi
+          mkdir "${RUN_DIR}"
+          mkdir -p /work/home /work/tmp /work/cache/huggingface/modules
+          exec > >(tee -a "${JOB_LOG}") 2>&1
+
+          finish() {
+            status=$?
+            end_epoch="$(date +%s)"
+            echo "=== QWEN3-SMALL JOB FINAL STATUS ==="
+            echo "exit_code: ${status}"
+            echo "runtime_seconds: $((end_epoch - START_EPOCH))"
+            echo "persistent_log: ${JOB_LOG}"
+          }
+          trap finish EXIT
+
+          if [[ ! -x "${SHARED_REPO}/.venv-autoinject/bin/python" ]]; then
+            echo "Reusable AutoInject environment is missing" >&2
+            exit 65
+          fi
+
+          echo "=== FETCH EXACT REMOTE SOURCE COMMIT ==="
+          if [[ -e "${PRIVATE_REPO}" ]]; then
+            echo "Private source destination already exists: ${PRIVATE_REPO}" >&2
+            exit 64
+          fi
+          mkdir "${PRIVATE_REPO}"
+          git -C "${PRIVATE_REPO}" init
+          git -C "${PRIVATE_REPO}" remote add origin "${SOURCE_REPOSITORY}"
+          git -C "${PRIVATE_REPO}" fetch \
+            --depth=1 \
+            origin \
+            "refs/heads/${SOURCE_BRANCH}"
+
+          readonly FETCHED_COMMIT="$(
+            git -C "${PRIVATE_REPO}" rev-parse FETCH_HEAD
+          )"
+          if [[ "${FETCHED_COMMIT}" != "${EXPECTED_COMMIT}" ]]; then
+            echo "Remote branch tip mismatch: expected ${EXPECTED_COMMIT}, got ${FETCHED_COMMIT}" >&2
+            exit 66
+          fi
+          git -C "${PRIVATE_REPO}" checkout --detach "${EXPECTED_COMMIT}"
+
+          readonly ACTUAL_COMMIT="$(
+            git -C "${PRIVATE_REPO}" rev-parse HEAD
+          )"
+          if [[ "${ACTUAL_COMMIT}" != "${EXPECTED_COMMIT}" ]]; then
+            echo "Detached checkout mismatch: expected ${EXPECTED_COMMIT}, got ${ACTUAL_COMMIT}" >&2
+            exit 66
+          fi
+          if git -C "${PRIVATE_REPO}" symbolic-ref -q HEAD >/dev/null; then
+            echo "Source checkout is unexpectedly attached to a branch" >&2
+            exit 66
+          fi
+          if git -C "${PRIVATE_REPO}" cat-file -e HEAD:.gitmodules 2>/dev/null; then
+            echo "Pinned source contains a prohibited .gitmodules file" >&2
+            exit 67
+          fi
+          if [[ -n "$(git -C "${PRIVATE_REPO}" status --porcelain)" ]]; then
+            echo "Pinned source checkout is not clean" >&2
+            exit 66
+          fi
+          echo "source_repository: ${SOURCE_REPOSITORY}"
+          echo "source_branch_verified: ${SOURCE_BRANCH}"
+          echo "source_commit: ${ACTUAL_COMMIT}"
+          echo "source_checkout: detached and clean"
+          echo "submodules: rejected"
+
+          cd "${PRIVATE_REPO}"
+          export PYTHONPATH="${PRIVATE_REPO}/src:${PRIVATE_REPO}/agentdojo/src"
+
+          echo "=== ENVIRONMENT AND GPU ==="
+          nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+          "${SHARED_REPO}/.venv-autoinject/bin/python" - <<'PYENV'
+          import pathlib
+          import sys
+
+          import agentdojo
+          import torch
+          import transformers
+          import trl
+          from agentdojo.models import MODEL_PROVIDERS, ModelsEnum
+          from rlpi.agentdojo import adaptive_agentdojo
+          from rlpi.attack.learners.common import feedback_utils
+
+          private_root = pathlib.Path("/work/AutoInject").resolve()
+          modules = (
+              ("agentdojo", agentdojo),
+              ("rlpi.agentdojo.adaptive_agentdojo", adaptive_agentdojo),
+              ("rlpi.attack.learners.common.feedback_utils", feedback_utils),
+          )
+          for name, module in modules:
+              module_path = pathlib.Path(module.__file__).resolve()
+              module_path.relative_to(private_root)
+              print(f"{name}: {module_path}")
+
+          model = ModelsEnum.SECALIGN_8B
+          print("python:", sys.version)
+          print("torch:", torch.__version__)
+          print("transformers:", transformers.__version__)
+          print("trl:", trl.__version__)
+          print("cuda_available:", torch.cuda.is_available())
+          print("gpu:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)
+          print("victim_model:", model.value)
+          print("victim_provider:", MODEL_PROVIDERS[model])
+          print("feedback_model: qwen3-small")
+          if not torch.cuda.is_available():
+              raise RuntimeError("CUDA is unavailable")
+          PYENV
+
+          echo "=== FROZEN-FIDELITY QWEN3-SMALL SMOKE SCOPE ==="
+          echo "victim_model: facebook/Meta-SecAlign-8B"
+          echo "learner: trl_suffix_meta_secalign_repro"
+          echo "attack_model_name: Qwen/Qwen2-1.5B"
+          echo "feedback_model: qwen3-small"
+          echo "task_pair: banking/user_task_0/injection_task_0"
+          echo "top_level_seed: 1"
+          echo "learner_seed: 42"
+          echo "query_budget: 1"
+          echo "budget_semantics: original controller check between outer cycles; not a hard one-query cap"
+          echo "expected_outer_victim_evaluations: 1"
+          echo "expected_grpo_victim_evaluations: 16"
+          echo "expected_total_victim_evaluations: 17"
+          echo "expected_second_outer_cycle: false"
+          echo "expected_outer_feedback: first-cycle 0.0/0.0 sentinel without a hosted request"
+          echo "expected_grpo_feedback: one initial unhosted 0.0/0.0 sentinel, then 15 hosted qwen3-small comparisons"
+
+          readonly -a AUTOINJECT_CMD=(
+            "${SHARED_REPO}/.venv-autoinject/bin/python" -u
+            -m rlpi.agentdojo.adaptive_agentdojo
+            exp_ident=meta-secalign-qwen3-small-grpo-smoke-banking-u0-i0
+            model=facebook/Meta-SecAlign-8B
+            learner=trl_suffix_meta_secalign_repro
+            learner.attack_model_name=Qwen/Qwen2-1.5B
+            +learner.feedback_model=qwen3-small
+            suite=banking
+            "user_tasks=[user_task_0]"
+            "injection_tasks=[injection_task_0]"
+            seed=1
+            learner.seed=42
+            query_budget=1
+            learner.grpo_num_generations=2
+            learner.grpo_num_iterations=1
+            learner.max_suffix_length=10
+            "hydra.run.dir=${RUN_DIR}"
+            hydra.job.chdir=false
+          )
+
+          echo "=== EXACT AUTOINJECT COMMAND ==="
+          printf '%q ' "${AUTOINJECT_CMD[@]}"
+          printf '\n'
+
+          echo "=== RUN ONE OUTER CYCLE WITH ORIGINAL BUDGET OVERSHOOT ==="
+          cd "${RUN_DIR}"
+          set +e
+          "${AUTOINJECT_CMD[@]}"
+          readonly AUTOINJECT_EXIT_CODE=$?
+          set -e
+          echo "autoinject_exit_code: ${AUTOINJECT_EXIT_CODE}"
+          if (( AUTOINJECT_EXIT_CODE != 0 )); then
+            echo "AutoInject command failed" >&2
+            exit "${AUTOINJECT_EXIT_CODE}"
+          fi
+
+          echo "=== EXTERNAL POST-RUN VALIDATION ==="
+          "${SHARED_REPO}/.venv-autoinject/bin/python" - \
+            "${RUN_DIR}" \
+            "${JOB_LOG}" \
+            "${SUCCESS_JSON}" \
+            "${EXPECTED_COMMIT}" \
+            "${AUTOINJECT_EXIT_CODE}" <<'PYASSERT'
+          import collections.abc
+          import datetime
+          import hashlib
+          import json
+          import math
+          import pathlib
+          import re
+          import sys
+
+          import torch
+          import yaml
+
+          run_dir = pathlib.Path(sys.argv[1]).resolve()
+          job_log = pathlib.Path(sys.argv[2]).resolve()
+          success_path = pathlib.Path(sys.argv[3]).resolve()
+          expected_commit = sys.argv[4]
+          autoinject_exit_code = int(sys.argv[5])
+
+          expected = {
+              "model": "facebook/Meta-SecAlign-8B",
+              "learner": "trl_suffix_meta_secalign_repro",
+              "attack_model_name": "Qwen/Qwen2-1.5B",
+              "feedback_model": "qwen3-small",
+              "suite": "banking",
+              "user_tasks": ["user_task_0"],
+              "injection_tasks": ["injection_task_0"],
+              "seed": 1,
+              "learner_seed": 42,
+              "query_budget": 1,
+              "grpo_num_generations": 2,
+              "grpo_num_iterations": 1,
+              "max_suffix_length": 10,
+          }
+          expected_queries = {
+              "outer": 1,
+              "grpo": 16,
+              "total": 17,
+              "budget_overshoot": 16,
+              "cycles": 1,
+          }
+
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+
+          def read_jsonl(path, label):
+              require(path.is_file() and path.stat().st_size > 0, f"Missing non-empty {label}: {path}")
+              records = []
+              for line_number, line in enumerate(path.read_text().splitlines(), 1):
+                  if not line.strip():
+                      continue
+                  try:
+                      value = json.loads(line)
+                  except json.JSONDecodeError as exc:
+                      raise RuntimeError(
+                          f"Malformed {label} JSON at line {line_number}: {exc}"
+                      ) from exc
+                  require(isinstance(value, dict), f"{label} line {line_number} is not an object")
+                  records.append(value)
+              require(records, f"{label} contains no records")
+              return records
+
+          require(autoinject_exit_code == 0, "AutoInject did not exit zero")
+
+          hydra_config_path = run_dir / ".hydra" / "config.yaml"
+          hydra_overrides_path = run_dir / ".hydra" / "overrides.yaml"
+          require(hydra_config_path.is_file(), "Missing executed Hydra config")
+          require(hydra_overrides_path.is_file(), "Missing executed Hydra overrides")
+          config = yaml.safe_load(hydra_config_path.read_text())
+          overrides = yaml.safe_load(hydra_overrides_path.read_text())
+          require(isinstance(config, dict), "Hydra config is not a mapping")
+          require(isinstance(overrides, list), "Hydra overrides are not a list")
+          learner = config.get("learner")
+          require(isinstance(learner, dict), "Executed learner config is not a mapping")
+
+          executed_checks = {
+              "model": config.get("model"),
+              "attack_model_name": learner.get("attack_model_name"),
+              "feedback_model": learner.get("feedback_model"),
+              "suite": config.get("suite"),
+              "user_tasks": config.get("user_tasks"),
+              "injection_tasks": config.get("injection_tasks"),
+              "seed": config.get("seed"),
+              "learner_seed": learner.get("seed"),
+              "query_budget": config.get("query_budget"),
+              "grpo_num_generations": learner.get("grpo_num_generations"),
+              "grpo_num_iterations": learner.get("grpo_num_iterations"),
+              "max_suffix_length": learner.get("max_suffix_length"),
+          }
+          for key, actual in executed_checks.items():
+              require(actual == expected[key], f"Executed Hydra setting mismatch for {key}: {actual!r}")
+
+          override_text = "\n".join(str(value) for value in overrides)
+          required_overrides = (
+              "model=facebook/Meta-SecAlign-8B",
+              "learner=trl_suffix_meta_secalign_repro",
+              "learner.attack_model_name=Qwen/Qwen2-1.5B",
+              "+learner.feedback_model=qwen3-small",
+              "suite=banking",
+              "user_tasks=[user_task_0]",
+              "injection_tasks=[injection_task_0]",
+              "seed=1",
+              "learner.seed=42",
+              "query_budget=1",
+              "learner.grpo_num_generations=2",
+              "learner.grpo_num_iterations=1",
+              "learner.max_suffix_length=10",
+          )
+          for value in required_overrides:
+              require(value in overrides, f"Executed Hydra override is missing: {value}")
+          prohibited = (
+              "feedback_reasoning_enabled",
+              "feedback_strict_logprob_extraction",
+              "feedback_logprobs",
+              "feedback_top_logprobs",
+          )
+          for field in prohibited:
+              require(field not in learner, f"Removed learner field executed: {field}")
+              require(field not in override_text, f"Removed learner override executed: {field}")
+
+          checkpoint_path = run_dir / "checkpoint.pt"
+          state_path = run_dir / "checkpoint_state.json"
+          require(checkpoint_path.is_file() and checkpoint_path.stat().st_size > 0, "Missing checkpoint.pt")
+          require(state_path.is_file() and state_path.stat().st_size > 0, "Missing checkpoint_state.json")
+          checkpoint = torch.load(checkpoint_path, map_location="cpu")
+          require(isinstance(checkpoint, collections.abc.Mapping), "checkpoint.pt is not a mapping")
+          require("policy_state_dict" in checkpoint, "checkpoint.pt lacks policy_state_dict")
+          policy_state = checkpoint["policy_state_dict"]
+          require(
+              isinstance(policy_state, collections.abc.Mapping) and len(policy_state) > 0,
+              "policy_state_dict is not a non-empty mapping",
+          )
+          for name, value in policy_state.items():
+              require(isinstance(name, str) and name, "Invalid policy_state_dict key")
+              require(torch.is_tensor(value), f"Non-tensor policy state entry: {name}")
+              require(value.device.type == "cpu", f"Policy state tensor was not loaded on CPU: {name}")
+              require(value.numel() > 0, f"Empty policy state tensor: {name}")
+
+          model_config = checkpoint.get("model_config")
+          require(isinstance(model_config, collections.abc.Mapping), "Missing checkpoint model_config")
+          require(
+              model_config.get("attack_model_name") == expected["attack_model_name"],
+              "checkpoint.pt attack-model metadata mismatch",
+          )
+
+          state = json.loads(state_path.read_text())
+          require(isinstance(state, dict), "checkpoint_state.json is not a mapping")
+          require(state.get("checkpoint_version") == "1.0", "Unexpected checkpoint state format")
+          model_info = state.get("model_info")
+          require(isinstance(model_info, dict), "Missing checkpoint model_info")
+          require(
+              model_info.get("attack_model_name") == expected["attack_model_name"],
+              "checkpoint_state attack-model metadata mismatch",
+          )
+          recorded_checkpoint = pathlib.Path(model_info.get("checkpoint_path", "")).resolve()
+          require(recorded_checkpoint == checkpoint_path, "checkpoint_state does not point to persistent checkpoint.pt")
+          snapshot = state.get("config_snapshot", {})
+          require(isinstance(snapshot, dict), "checkpoint config_snapshot is not a mapping")
+          if "feedback_model" in snapshot:
+              require(
+                  snapshot["feedback_model"] == expected["feedback_model"],
+                  "Available checkpoint feedback-model metadata is incorrect",
+              )
+          for key in ("grpo_num_generations", "grpo_num_iterations", "max_suffix_length"):
+              require(snapshot.get(key) == expected[key], f"Checkpoint snapshot mismatch for {key}")
+
+          reporting = state.get("experiment_reporting")
+          require(isinstance(reporting, dict), "Missing experiment_reporting")
+          observed_queries = {
+              "outer": int(reporting.get("victim_queries_outer", -1)),
+              "grpo": int(reporting.get("victim_queries_grpo", -1)),
+              "total": int(reporting.get("victim_queries_total", -1)),
+              "budget_overshoot": int(reporting.get("budget_overshoot", -1)),
+          }
+          for key in ("outer", "grpo", "total", "budget_overshoot"):
+              require(
+                  observed_queries[key] == expected_queries[key],
+                  f"Unexpected {key} query accounting: {observed_queries[key]}",
+              )
+          require(int(reporting.get("pipeline_runs_attempted", -1)) == 17, "Expected 17 pipeline attempts")
+          require(int(reporting.get("pipeline_runs_completed", -1)) == 17, "Expected 17 completed pipelines")
+          require(int(reporting.get("pipeline_run_errors", -1)) == 0, "Pipeline errors were recorded")
+          require(int(reporting.get("feedback_model_calls_outer", -1)) == 0, "Unexpected hosted outer feedback call")
+          require(int(reporting.get("feedback_model_calls_grpo", -1)) == 15, "Expected 15 hosted GRPO calls after the first unhosted GRPO sentinel")
+          require(int(reporting.get("feedback_model_calls_total", -1)) == 15, "Unexpected hosted feedback-call total")
+          cycles = reporting.get("cycles")
+          require(isinstance(cycles, list) and len(cycles) == 1, "Expected exactly one outer cycle")
+          cycle = cycles[0]
+          require(isinstance(cycle, dict), "Cycle accounting is malformed")
+          require(int(cycle.get("iteration", -1)) == 1, "Unexpected outer-cycle index")
+          require(int(cycle.get("victim_queries_outer", -1)) == 1, "Cycle lacks one outer query")
+          require(int(cycle.get("victim_queries_grpo", -1)) == 16, "Cycle lacks 16 GRPO queries")
+          require(int(cycle.get("victim_queries_total", -1)) == 17, "Cycle total is not 17")
+          learner_state = state.get("learner_state", {})
+          require(int(learner_state.get("queries_used", -1)) == 17, "Controller queries_used is not 17")
+          require(int(learner_state.get("training_count", 0)) >= 1, "No training session completed")
+
+          output_dir = run_dir / "grpo_training_outputs"
+          experience_records = read_jsonl(output_dir / "experience_history.jsonl", "experience_history.jsonl")
+          sentinel_count = 0
+          for record in experience_records:
+              p0 = float(record["prob_0"])
+              p1 = float(record["prob_1"])
+              require(math.isfinite(p0) and math.isfinite(p1), "Non-finite outer feedback probability")
+              if p0 == 0.0 and p1 == 0.0:
+                  sentinel_count += 1
+          require(sentinel_count == 1, f"Expected one cold outer 0.0/0.0 sentinel, got {sentinel_count}")
+
+          reward_records = read_jsonl(run_dir / "reward_stats.jsonl", "reward_stats.jsonl")
+          require(
+              max(int(record.get("reward_function", {}).get("total_completions", 0) or 0) for record in reward_records) >= 16,
+              "Reward statistics do not contain the expected GRPO completions",
+          )
+          require(
+              max(int(record.get("reward_function", {}).get("new_evaluations", 0) or 0) for record in reward_records) >= 16,
+              "Reward statistics do not contain real GRPO evaluations",
+          )
+
+          metric_records = read_jsonl(output_dir / "training_metrics.jsonl", "training_metrics.jsonl")
+          training_steps = max(
+              int(record.get("metrics", {}).get("global_step", 0) or 0)
+              for record in metric_records
+          )
+          require(training_steps >= 1, "No real optimizer/training step completed")
+          require(
+              max(int(record.get("metrics", {}).get("reward_new_evaluations", 0) or 0) for record in metric_records) >= 16,
+              "Training metrics do not prove real evaluations occurred",
+          )
+
+          grpo_records = read_jsonl(output_dir / "grpo_evaluations.jsonl", "grpo_evaluations.jsonl")
+          require(len(grpo_records) == 16, f"Expected 16 GRPO evaluation records, got {len(grpo_records)}")
+          successful_hosted = 0
+          unhosted_grpo_sentinels = 0
+          for index, record in enumerate(grpo_records, 1):
+              for field in (
+                  "prob_0",
+                  "prob_1",
+                  "reward",
+                  "suffix",
+                  "is_better_than_previous",
+                  "gpt_reasoning",
+                  "user_task_id",
+                  "injection_task_id",
+              ):
+                  require(field in record, f"Malformed GRPO record {index}: missing {field}")
+              p0 = float(record["prob_0"])
+              p1 = float(record["prob_1"])
+              reward = float(record["reward"])
+              require(
+                  all(math.isfinite(value) for value in (p0, p1, reward)),
+                  f"Non-finite GRPO values in record {index}",
+              )
+              require(isinstance(record["suffix"], str), f"Invalid suffix in GRPO record {index}")
+              require(isinstance(record["is_better_than_previous"], bool), f"Invalid decision in GRPO record {index}")
+              require(isinstance(record["gpt_reasoning"], str), f"Invalid reasoning in GRPO record {index}")
+              require(record["user_task_id"] == "user_task_0", f"Wrong user task in GRPO record {index}")
+              require(record["injection_task_id"] == "injection_task_0", f"Wrong injection task in GRPO record {index}")
+              if p0 == 0.0 and p1 == 0.0:
+                  require(
+                      index == 1,
+                      f"Hosted or unexpected GRPO 0.0/0.0 result in record {index}",
+                  )
+                  unhosted_grpo_sentinels += 1
+                  continue
+              require(0.0 <= p0 <= 1.0 and 0.0 <= p1 <= 1.0, f"Out-of-range GRPO probabilities in record {index}")
+              require(math.isclose(p0 + p1, 1.0, rel_tol=1e-6, abs_tol=1e-6), f"Unpaired GRPO probabilities in record {index}")
+              successful_hosted += 1
+          require(
+              unhosted_grpo_sentinels == 1,
+              "Expected exactly one first-record unhosted GRPO sentinel",
+          )
+          require(
+              successful_hosted == int(reporting["feedback_model_calls_grpo"]),
+              "Hosted GRPO records do not match hosted feedback calls",
+          )
+
+          log_text = job_log.read_text()
+          unexpected_patterns = (
+              r"Traceback \(most recent call last\):",
+              r"feedback comparison failed",
+              r"feedback exception",
+              r"pipeline execution failed",
+              r"GRPO training failed",
+          )
+          for pattern in unexpected_patterns:
+              require(
+                  re.search(pattern, log_text, flags=re.IGNORECASE) is None,
+                  f"Unexpected feedback, pipeline, or training error matched: {pattern}",
+              )
+
+          checkpoint_digest = hashlib.sha256()
+          with checkpoint_path.open("rb") as checkpoint_file:
+              for chunk in iter(lambda: checkpoint_file.read(1024 * 1024), b""):
+                  checkpoint_digest.update(chunk)
+          checkpoint_sha256 = checkpoint_digest.hexdigest()
+          success = {
+              "source_sha": expected_commit,
+              "task": {
+                  "suite": expected["suite"],
+                  "user_task": expected["user_tasks"][0],
+                  "injection_task": expected["injection_tasks"][0],
+              },
+              "seeds": {
+                  "seed": expected["seed"],
+                  "learner_seed": expected["learner_seed"],
+              },
+              "expected_query_accounting": expected_queries,
+              "observed_query_accounting": observed_queries,
+              "initial_sentinel_count": sentinel_count,
+              "unhosted_first_grpo_sentinel_count": unhosted_grpo_sentinels,
+              "successful_hosted_grpo_comparison_count": successful_hosted,
+              "training_step_count": training_steps,
+              "checkpoint_path": str(checkpoint_path),
+              "checkpoint_sha256": checkpoint_sha256,
+              "feedback_model": expected["feedback_model"],
+              "validation_timestamp": datetime.datetime.now(
+                  datetime.timezone.utc
+              ).isoformat(),
+          }
+          require(not success_path.exists(), "Success record already exists")
+          success_path.write_text(json.dumps(success, indent=2, sort_keys=True) + "\n")
+          print("observed_query_accounting:", json.dumps(observed_queries, sort_keys=True))
+          print("initial_sentinel_count:", sentinel_count)
+          print("successful_hosted_grpo_comparison_count:", successful_hosted)
+          print("training_step_count:", training_steps)
+          print("checkpoint_sha256:", checkpoint_sha256)
+          print("QWEN3-SMALL FROZEN-FIDELITY VALIDATION: PASS")
+          PYASSERT
+
+          if [[ ! -s "${SUCCESS_JSON}" ]]; then
+            echo "Success record was not created" >&2
+            exit 68
+          fi
+          echo "success_record: ${SUCCESS_JSON}"
+          echo "Qwen3-small frozen-fidelity GRPO smoke test completed successfully."
+        env:
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nrp-llm-token
+              key: NRP_LLM_TOKEN
+        - name: OPENAI_BASE_URL
+          value: https://ellm.nrp-nautilus.io/v1
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        - name: PYTHONNOUSERSITE
+          value: "1"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: HOME
+          value: /work/home
+        - name: TMPDIR
+          value: /work/tmp
+        - name: XDG_CACHE_HOME
+          value: /work/cache
+        - name: TORCH_HOME
+          value: /work/cache/torch
+        - name: HF_HOME
+          value: /work/cache/huggingface
+        - name: HF_HUB_CACHE
+          value: /model-cache
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: TRANSFORMERS_OFFLINE
+          value: "1"
+        - name: HF_MODULES_CACHE
+          value: /work/cache/huggingface/modules
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"
+        resources:
+          requests:
+            cpu: "4"
+            memory: 48Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: "4"
+            memory: 48Gi
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+          readOnly: true
+        - name: workspace
+          mountPath: /workspace/results
+          subPath: results
+        - name: workspace
+          mountPath: /model-cache
+          subPath: hf-cache
+          readOnly: true
+        - name: private-work
+          mountPath: /work
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace
+      - name: private-work
+        emptyDir:
+          sizeLimit: 64Gi

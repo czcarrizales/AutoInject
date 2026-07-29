@@ -104,6 +104,13 @@ spec:
             exit 66
           fi
           printf '%s\n' "${ACTUAL_COMMIT}" > "${VERIFIED_COMMIT_FILE}"
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
         volumeMounts:
         - name: private-work
           mountPath: /work

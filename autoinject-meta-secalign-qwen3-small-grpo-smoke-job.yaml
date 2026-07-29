@@ -71,15 +71,20 @@ spec:
           git -C "${PRIVATE_REPO}" init
           git -C "${PRIVATE_REPO}" remote add origin "${SOURCE_REPOSITORY}"
           git -C "${PRIVATE_REPO}" fetch \
-            --depth=1 \
+            --no-tags \
             origin \
             "refs/heads/${SOURCE_BRANCH}"
 
-          FETCHED_COMMIT="$(
-            git -C "${PRIVATE_REPO}" rev-parse FETCH_HEAD
+          BRANCH_TIP="$(
+            git -C "${PRIVATE_REPO}" rev-parse --verify 'FETCH_HEAD^{commit}'
           )"
-          if [ "${FETCHED_COMMIT}" != "${EXPECTED_COMMIT}" ]; then
-            echo "Remote branch tip mismatch: expected ${EXPECTED_COMMIT}, got ${FETCHED_COMMIT}" >&2
+          if ! git -C "${PRIVATE_REPO}" cat-file -e "${EXPECTED_COMMIT}^{commit}"; then
+            echo "Pinned source commit is absent from fetched branch history: ${EXPECTED_COMMIT}" >&2
+            exit 66
+          fi
+          if ! git -C "${PRIVATE_REPO}" merge-base --is-ancestor \
+              "${EXPECTED_COMMIT}" "${BRANCH_TIP}"; then
+            echo "Pinned source commit is not an ancestor of approved branch tip" >&2
             exit 66
           fi
           git -C "${PRIVATE_REPO}" checkout --detach "${EXPECTED_COMMIT}"
@@ -103,7 +108,10 @@ spec:
             echo "Pinned source checkout is not clean" >&2
             exit 66
           fi
-          printf '%s\n' "${ACTUAL_COMMIT}" > "${VERIFIED_COMMIT_FILE}"
+          printf '%s\n' "${EXPECTED_COMMIT}" > "${VERIFIED_COMMIT_FILE}"
+          printf 'approved_branch_tip: %s\n' "${BRANCH_TIP}"
+          printf 'pinned_source_commit: %s\n' "${EXPECTED_COMMIT}"
+          printf 'pinned_source_is_ancestor: true\n'
         resources:
           requests:
             cpu: 250m

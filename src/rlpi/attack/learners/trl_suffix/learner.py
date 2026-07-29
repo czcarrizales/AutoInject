@@ -92,10 +92,6 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
         gpt_medium_weight: float = 0.5,
         gpt_transition_weight: float = 0.3,
         gpt_dense_weight: float = 0.1,
-        feedback_reasoning_enabled: Optional[bool] = None,
-        feedback_strict_logprob_extraction: bool = False,
-        feedback_logprobs: bool = True,
-        feedback_top_logprobs: int = 5,
         **kwargs,
     ):
         """Initialize TRL Suffix Learner.
@@ -104,10 +100,6 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
             attack_model_name: Model name for attack policy that generates adversarial suffixes
                              (e.g., "Qwen/Qwen2-1.5B").
             feedback_model: Model identifier for GPT feedback (e.g., "gpt-4o-2024-08-06").
-            feedback_reasoning_enabled: Optional hosted reasoning setting.
-                None preserves model-specific historical behavior.
-            feedback_strict_logprob_extraction: Require paired hosted digit
-                logprobs with strict response validation.
             victim_model_name: Display name of the victim model being attacked
                              (e.g., "GPT-4", "Claude"). Used in prompts.
             save_outputs: Whether to save training outputs to files.
@@ -287,12 +279,6 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
         return build_gpt_config_dict(
             gpt_enabled=self.gpt_enabled,
             feedback_model=self.feedback_model,
-            feedback_reasoning_enabled=self.feedback_reasoning_enabled,
-            feedback_strict_logprob_extraction=(
-                self.feedback_strict_logprob_extraction
-            ),
-            feedback_logprobs=self.feedback_logprobs,
-            feedback_top_logprobs=self.feedback_top_logprobs,
             gpt_sparse_threshold=self.gpt_sparse_threshold,
             gpt_medium_threshold=self.gpt_medium_threshold,
             gpt_dense_threshold=self.gpt_dense_threshold,
@@ -551,7 +537,7 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
             current_suffix=self.current_suffix,
             previous_suffix=self.best_suffix,
             injection_goal=self.injection_task._original_goal,
-            gpt_config=gpt_config,
+            gpt_config=self._get_gpt_config(),
             verbose=self.verbose,
             on_model_call=(
                 lambda: self.experiment_reporting.record_feedback_model_call(
@@ -899,15 +885,6 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
                 "grpo_num_iterations": self.grpo_num_iterations,
                 "grpo_learning_rate": self.grpo_learning_rate,
                 "min_experiences_for_training": self.min_experiences_for_training,
-                "feedback_model": self.feedback_model,
-                "feedback_reasoning_enabled": (
-                    self.feedback_reasoning_enabled
-                ),
-                "feedback_strict_logprob_extraction": (
-                    self.feedback_strict_logprob_extraction
-                ),
-                "feedback_logprobs": self.feedback_logprobs,
-                "feedback_top_logprobs": self.feedback_top_logprobs,
             },
             "experiment_reporting": experiment_reporting or {},
         }

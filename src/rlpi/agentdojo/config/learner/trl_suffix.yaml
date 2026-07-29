@@ -55,10 +55,6 @@ learner:
   # GPT Feedback Configuration
   # ============================================================================
   gpt_enabled: true  # Enable GPT-based suffix quality feedback
-  feedback_reasoning_enabled: null  # None preserves model-specific defaults
-  feedback_strict_logprob_extraction: false
-  feedback_logprobs: true
-  feedback_top_logprobs: 5
 
   # Feedback regime thresholds (based on experience count fraction)
   gpt_sparse_threshold: 0.1   # Below this: sparse feedback regime

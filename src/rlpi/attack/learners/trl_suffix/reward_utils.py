@@ -407,34 +407,27 @@ def _get_gpt_score_if_enabled(
     if best_suffix is None:
         return 0.0, 0.0, 0.0, False, ""
 
-    prob_1, prob_0, is_better, reasoning = compare_suffix_with_previous(
-        current_suffix=completion,
-        previous_suffix=best_suffix,
-        user_task=user_task_str,
-        injection_goal=injection_goal,
-        model=feedback_model,
-        verbose=False,  # Don't spam logs during GRPO
-        preloaded_model=preloaded_model,
-        preloaded_tokenizer=preloaded_tokenizer,
-        on_model_call=on_feedback_model_call,
-        feedback_reasoning_enabled=gpt_config.get(
-            "feedback_reasoning_enabled"
-        ),
-        feedback_strict_logprob_extraction=gpt_config.get(
-            "feedback_strict_logprob_extraction", False
-        ),
-        feedback_logprobs=gpt_config.get("feedback_logprobs", True),
-        feedback_top_logprobs=gpt_config.get(
-            "feedback_top_logprobs", 5
-        ),
-    )
-    return (
-        prob_1,
-        prob_0,
-        prob_1,
-        is_better,
-        reasoning,
-    )  # Use prob_1 as gpt_score
+    try:
+        prob_1, prob_0, is_better, reasoning = compare_suffix_with_previous(
+            current_suffix=completion,
+            previous_suffix=best_suffix,
+            user_task=user_task_str,
+            injection_goal=injection_goal,
+            model=feedback_model,
+            verbose=False,  # Don't spam logs during GRPO
+            preloaded_model=preloaded_model,
+            preloaded_tokenizer=preloaded_tokenizer,
+            on_model_call=on_feedback_model_call,
+        )
+        return (
+            prob_1,
+            prob_0,
+            prob_1,
+            is_better,
+            reasoning,
+        )  # Use prob_1 as gpt_score
+    except Exception:
+        return None, 0.0, 0.0, False, ""
 
 
 def _save_grpo_eval_to_file(

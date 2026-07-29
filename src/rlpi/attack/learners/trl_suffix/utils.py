@@ -557,21 +557,12 @@ def build_gpt_config_dict(
     gpt_medium_weight: float,
     gpt_transition_weight: float,
     gpt_dense_weight: float,
-    feedback_reasoning_enabled: Optional[bool] = None,
-    feedback_strict_logprob_extraction: bool = False,
-    feedback_logprobs: bool = True,
-    feedback_top_logprobs: int = 5,
 ) -> Dict[str, Any]:
     """Build GPT config dictionary for reward computation.
 
     Args:
         gpt_enabled: Whether GPT feedback is enabled
         feedback_model: Model to use for GPT feedback evaluation
-        feedback_reasoning_enabled: Optional hosted-model reasoning setting
-        feedback_strict_logprob_extraction: Whether hosted logprobs must pass
-            strict validation
-        feedback_logprobs: Whether hosted feedback requests logprobs
-        feedback_top_logprobs: Number of hosted token alternatives requested
         gpt_sparse_threshold: Threshold for sparse feedback
         gpt_medium_threshold: Threshold for medium feedback
         gpt_dense_threshold: Threshold for dense feedback
@@ -586,13 +577,6 @@ def build_gpt_config_dict(
     return {
         "enabled": gpt_enabled,
         "model": feedback_model,
-        "feedback_model": feedback_model,
-        "feedback_reasoning_enabled": feedback_reasoning_enabled,
-        "feedback_strict_logprob_extraction": (
-            feedback_strict_logprob_extraction
-        ),
-        "feedback_logprobs": feedback_logprobs,
-        "feedback_top_logprobs": feedback_top_logprobs,
         "thresholds": {
             "sparse": gpt_sparse_threshold,
             "medium": gpt_medium_threshold,

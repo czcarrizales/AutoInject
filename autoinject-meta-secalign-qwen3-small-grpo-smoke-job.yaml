@@ -39,6 +39,74 @@ spec:
                 - NVIDIA-RTX-A6000
                 - NVIDIA-RTX-PRO-6000-Blackwell-Max-Q-Workstation-Edition
                 - Quadro-RTX-8000
+      initContainers:
+      - name: stage-pinned-qwen3-small-source
+        image: alpine/git:v2.47.2
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-ec"]
+        args:
+        - |
+          EXPECTED_COMMIT="c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7"
+          SOURCE_REPOSITORY="https://github.com/czcarrizales/AutoInject"
+          SOURCE_BRANCH="experiments/qwen3-small-baseline-v1"
+          PRIVATE_REPO="/work/AutoInject"
+          VERIFIED_COMMIT_FILE="/work/source-commit.txt"
+          CA_CERTIFICATES="/etc/ssl/certs/ca-certificates.crt"
+
+          GIT_PATH="$(command -v git)"
+          test -x "${GIT_PATH}"
+          test -r "${CA_CERTIFICATES}"
+          printf 'git_path: %s\n' "${GIT_PATH}"
+          printf 'git_version: %s\n' "$("${GIT_PATH}" --version)"
+
+          if [ -e "${PRIVATE_REPO}" ]; then
+            echo "Private source destination already exists: ${PRIVATE_REPO}" >&2
+            exit 64
+          fi
+          if [ -e "${VERIFIED_COMMIT_FILE}" ]; then
+            echo "Verified source record already exists: ${VERIFIED_COMMIT_FILE}" >&2
+            exit 64
+          fi
+          mkdir "${PRIVATE_REPO}"
+          git -C "${PRIVATE_REPO}" init
+          git -C "${PRIVATE_REPO}" remote add origin "${SOURCE_REPOSITORY}"
+          git -C "${PRIVATE_REPO}" fetch \
+            --depth=1 \
+            origin \
+            "refs/heads/${SOURCE_BRANCH}"
+
+          FETCHED_COMMIT="$(
+            git -C "${PRIVATE_REPO}" rev-parse FETCH_HEAD
+          )"
+          if [ "${FETCHED_COMMIT}" != "${EXPECTED_COMMIT}" ]; then
+            echo "Remote branch tip mismatch: expected ${EXPECTED_COMMIT}, got ${FETCHED_COMMIT}" >&2
+            exit 66
+          fi
+          git -C "${PRIVATE_REPO}" checkout --detach "${EXPECTED_COMMIT}"
+
+          ACTUAL_COMMIT="$(
+            git -C "${PRIVATE_REPO}" rev-parse HEAD
+          )"
+          if [ "${ACTUAL_COMMIT}" != "${EXPECTED_COMMIT}" ]; then
+            echo "Detached checkout mismatch: expected ${EXPECTED_COMMIT}, got ${ACTUAL_COMMIT}" >&2
+            exit 66
+          fi
+          if git -C "${PRIVATE_REPO}" symbolic-ref -q HEAD >/dev/null; then
+            echo "Source checkout is unexpectedly attached to a branch" >&2
+            exit 66
+          fi
+          if git -C "${PRIVATE_REPO}" cat-file -e HEAD:.gitmodules 2>/dev/null; then
+            echo "Pinned source contains a prohibited .gitmodules file" >&2
+            exit 67
+          fi
+          if [ -n "$(git -C "${PRIVATE_REPO}" status --porcelain)" ]; then
+            echo "Pinned source checkout is not clean" >&2
+            exit 66
+          fi
+          printf '%s\n' "${ACTUAL_COMMIT}" > "${VERIFIED_COMMIT_FILE}"
+        volumeMounts:
+        - name: private-work
+          mountPath: /work
       containers:
       - name: autoinject-qwen3-small
         image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
@@ -52,6 +120,7 @@ spec:
           readonly SOURCE_BRANCH="experiments/qwen3-small-baseline-v1"
           readonly SHARED_REPO="/workspace/AutoInject"
           readonly PRIVATE_REPO="/work/AutoInject"
+          readonly VERIFIED_COMMIT_FILE="/work/source-commit.txt"
           readonly RESULT_BASE="/workspace/results/autoinject-qwen3-small/grpo-smoke"
           readonly RUN_ID="qwen3-small-$(date -u +%Y%m%dT%H%M%S)-${POD_UID}"
           readonly RESULT_ROOT="${RESULT_BASE}/${RUN_ID}"
@@ -85,44 +154,18 @@ spec:
           fi
 
           echo "=== FETCH EXACT REMOTE SOURCE COMMIT ==="
-          if [[ -e "${PRIVATE_REPO}" ]]; then
-            echo "Private source destination already exists: ${PRIVATE_REPO}" >&2
-            exit 64
+          if [[ ! -r "${VERIFIED_COMMIT_FILE}" ]]; then
+            echo "Missing init-container commit record: ${VERIFIED_COMMIT_FILE}" >&2
+            exit 65
           fi
-          mkdir "${PRIVATE_REPO}"
-          git -C "${PRIVATE_REPO}" init
-          git -C "${PRIVATE_REPO}" remote add origin "${SOURCE_REPOSITORY}"
-          git -C "${PRIVATE_REPO}" fetch \
-            --depth=1 \
-            origin \
-            "refs/heads/${SOURCE_BRANCH}"
-
-          readonly FETCHED_COMMIT="$(
-            git -C "${PRIVATE_REPO}" rev-parse FETCH_HEAD
-          )"
-          if [[ "${FETCHED_COMMIT}" != "${EXPECTED_COMMIT}" ]]; then
-            echo "Remote branch tip mismatch: expected ${EXPECTED_COMMIT}, got ${FETCHED_COMMIT}" >&2
-            exit 66
-          fi
-          git -C "${PRIVATE_REPO}" checkout --detach "${EXPECTED_COMMIT}"
-
-          readonly ACTUAL_COMMIT="$(
-            git -C "${PRIVATE_REPO}" rev-parse HEAD
-          )"
+          IFS= read -r ACTUAL_COMMIT < "${VERIFIED_COMMIT_FILE}"
+          readonly ACTUAL_COMMIT
           if [[ "${ACTUAL_COMMIT}" != "${EXPECTED_COMMIT}" ]]; then
-            echo "Detached checkout mismatch: expected ${EXPECTED_COMMIT}, got ${ACTUAL_COMMIT}" >&2
+            echo "Staged source mismatch: expected ${EXPECTED_COMMIT}, got ${ACTUAL_COMMIT}" >&2
             exit 66
           fi
-          if git -C "${PRIVATE_REPO}" symbolic-ref -q HEAD >/dev/null; then
-            echo "Source checkout is unexpectedly attached to a branch" >&2
-            exit 66
-          fi
-          if git -C "${PRIVATE_REPO}" cat-file -e HEAD:.gitmodules 2>/dev/null; then
-            echo "Pinned source contains a prohibited .gitmodules file" >&2
-            exit 67
-          fi
-          if [[ -n "$(git -C "${PRIVATE_REPO}" status --porcelain)" ]]; then
-            echo "Pinned source checkout is not clean" >&2
+          if [[ "$(<"${PRIVATE_REPO}/.git/HEAD")" != "${EXPECTED_COMMIT}" ]]; then
+            echo "Detached staged HEAD mismatch: expected ${EXPECTED_COMMIT}" >&2
             exit 66
           fi
           echo "source_repository: ${SOURCE_REPOSITORY}"

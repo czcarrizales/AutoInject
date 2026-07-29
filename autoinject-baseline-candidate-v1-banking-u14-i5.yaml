@@ -1,0 +1,398 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-baseline-candidate-v1-banking-u14-i5
+  labels:
+    app.kubernetes.io/name: autoinject
+    app.kubernetes.io/instance: autoinject-baseline-candidate-v1-banking-u14-i5
+    autoinject.experiment/suite: banking
+    autoinject.experiment/user-task: user-task-14
+    autoinject.experiment/injection-task: injection-task-5
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 259200
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject
+        app.kubernetes.io/instance: autoinject-baseline-candidate-v1-banking-u14-i5
+        autoinject.experiment/suite: banking
+        autoinject.experiment/user-task: user-task-14
+        autoinject.experiment/injection-task: injection-task-5
+    spec:
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-A100-80GB-PCIe
+                - NVIDIA-A100-PCIE-40GB
+                - NVIDIA-A100-SXM4-80GB
+                - NVIDIA-A40
+                - NVIDIA-GH200-480GB
+                - NVIDIA-H100-80GB-HBM3
+                - NVIDIA-H200-NVL
+                - NVIDIA-L40
+                - NVIDIA-L40S
+                - NVIDIA-RTX-A6000
+                - NVIDIA-RTX-PRO-6000-Blackwell-Max-Q-Workstation-Edition
+                - Quadro-RTX-8000
+      containers:
+      - name: autoinject
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        command: ["bash", "-lc"]
+        args:
+        - |
+          set -Eeuo pipefail
+
+          readonly EXPECTED_COMMIT="33c2cbdb332d0a9b06f498d4eeac1f11c4491247"
+          readonly SOURCE_ARCHIVE_URL="https://codeload.github.com/czcarrizales/AutoInject/tar.gz/33c2cbdb332d0a9b06f498d4eeac1f11c4491247"
+          readonly SOURCE_ARCHIVE="/work/AutoInject-${EXPECTED_COMMIT}.tar.gz"
+          readonly SHARED_REPO="/workspace/AutoInject"
+          readonly PRIVATE_REPO="/work/AutoInject"
+          readonly RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
+          readonly RESULT_ROOT="/workspace/results/autoinject-baseline-candidate-v1/banking-u14-i5/seed-1/${RUN_ID}"
+          readonly RUN_DIR="${RESULT_ROOT}/run"
+          readonly JOB_LOG="${RESULT_ROOT}/job.log"
+          readonly START_EPOCH="$(date +%s)"
+
+          mkdir -p "${RUN_DIR}" /work/home /work/tmp /work/cache/huggingface/modules
+          exec > >(tee -a "${JOB_LOG}") 2>&1
+
+          finish() {
+            status=$?
+            end_epoch="$(date +%s)"
+            echo "=== JOB FINAL STATUS ==="
+            echo "exit_code: ${status}"
+            echo "runtime_seconds: $((end_epoch - START_EPOCH))"
+            echo "persistent_log: ${JOB_LOG}"
+          }
+          trap finish EXIT
+
+          if [[ ! -x "${SHARED_REPO}/.venv-autoinject/bin/python" ]]; then
+            echo "Reusable AutoInject environment is missing: ${SHARED_REPO}/.venv-autoinject" >&2
+            exit 65
+          fi
+          echo "Reusable Python environment: ${SHARED_REPO}/.venv-autoinject"
+
+          echo "=== FRESH PRIVATE SOURCE ARCHIVE ==="
+          if [[ -e "${PRIVATE_REPO}" ]]; then
+            echo "Private source destination already exists: ${PRIVATE_REPO}" >&2
+            exit 64
+          fi
+          "${SHARED_REPO}/.venv-autoinject/bin/python" - \
+            "${SOURCE_ARCHIVE_URL}" \
+            "${SOURCE_ARCHIVE}" \
+            "${PRIVATE_REPO}" \
+            "${EXPECTED_COMMIT}" <<'PYSOURCE'
+          import pathlib
+          import shutil
+          import sys
+          import tarfile
+          import urllib.request
+
+          archive_url = sys.argv[1]
+          archive_path = pathlib.Path(sys.argv[2])
+          private_repo = pathlib.Path(sys.argv[3])
+          expected_commit = sys.argv[4]
+          expected_root = f"AutoInject-{expected_commit}"
+          work_root = archive_path.parent
+
+          if private_repo.exists():
+              raise RuntimeError(f"Private source destination already exists: {private_repo}")
+          if archive_path.exists():
+              raise RuntimeError(f"Temporary source archive already exists: {archive_path}")
+
+          try:
+              with urllib.request.urlopen(archive_url) as response:
+                  with archive_path.open("xb") as destination:
+                      shutil.copyfileobj(response, destination)
+
+              with tarfile.open(archive_path, mode="r:gz") as archive:
+                  members = archive.getmembers()
+                  top_levels = set()
+                  for member in members:
+                      member_path = pathlib.PurePosixPath(member.name)
+                      if member_path.is_absolute() or ".." in member_path.parts:
+                          raise RuntimeError(f"Unsafe archive member path: {member.name}")
+                      if member_path.parts:
+                          top_levels.add(member_path.parts[0])
+                  if top_levels != {expected_root}:
+                      raise RuntimeError(
+                          "Source archive must contain exactly the expected top-level "
+                          f"directory {expected_root!r}; found {sorted(top_levels)!r}"
+                      )
+                  archive.extractall(path=work_root)
+
+              extracted_root = work_root / expected_root
+              if not extracted_root.is_dir():
+                  raise RuntimeError(
+                      f"Expected extracted source directory is missing: {extracted_root}"
+                  )
+              extracted_root.rename(private_repo)
+          finally:
+              archive_path.unlink(missing_ok=True)
+          PYSOURCE
+
+          echo "source_method: exact GitHub commit archive"
+          echo "source_commit: ${EXPECTED_COMMIT}"
+
+          if [[ -e "${PRIVATE_REPO}/.gitmodules" ]]; then
+            echo "Unexpected .gitmodules exists in the exact commit archive: ${PRIVATE_REPO}/.gitmodules" >&2
+            exit 67
+          fi
+          echo ".gitmodules: absent as expected"
+
+          cd "${PRIVATE_REPO}"
+          export PYTHONPATH="${PRIVATE_REPO}/src:${PRIVATE_REPO}/agentdojo/src"
+
+          echo "=== ENVIRONMENT AND GPU ==="
+          nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+          "${SHARED_REPO}/.venv-autoinject/bin/python" - <<'PYENV'
+          import os
+          import pathlib
+          import sys
+
+          import torch
+          import transformers
+          import trl
+          import agentdojo
+          from agentdojo.models import MODEL_PROVIDERS, ModelsEnum
+          from rlpi.agentdojo import adaptive_agentdojo
+          from rlpi.attack.learners.common import feedback_utils
+
+          private_root = pathlib.Path("/work/AutoInject").resolve()
+          modules_to_check = (
+              ("agentdojo", agentdojo),
+              ("rlpi.agentdojo.adaptive_agentdojo", adaptive_agentdojo),
+              ("rlpi.attack.learners.common.feedback_utils", feedback_utils),
+          )
+          for module_name, module in modules_to_check:
+              module_file = getattr(module, "__file__", None)
+              if module_file is None:
+                  raise RuntimeError(
+                      f"Imported module has no file path: {module_name}"
+                  )
+              module_path = pathlib.Path(module_file).resolve()
+              module_path.relative_to(private_root)
+              print(f"{module_name}: {module_path}")
+
+          model = ModelsEnum.SECALIGN_8B
+          print("python:", sys.version)
+          print("torch:", torch.__version__)
+          print("transformers:", transformers.__version__)
+          print("trl:", trl.__version__)
+          print("cuda_available:", torch.cuda.is_available())
+          print("gpu:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)
+          print("victim_model:", model.value)
+          print("victim_provider:", MODEL_PROVIDERS[model])
+          print("feedback_model: gemma-small")
+          print("nrp_base_url:", os.environ.get("OPENAI_BASE_URL"))
+          print("nrp_token_present:", bool(os.environ.get("OPENAI_API_KEY")))
+          print("hf_token_present:", bool(os.environ.get("HF_TOKEN")))
+          if not torch.cuda.is_available():
+              raise RuntimeError("CUDA is unavailable")
+          PYENV
+
+          echo "=== BASELINE-CANDIDATE SCOPE ==="
+          echo "victim_model: facebook/Meta-SecAlign-8B"
+          echo "learner_config: trl_suffix_meta_secalign_repro"
+          echo "feedback_model: gemma-small (fixed explicit Hydra override)"
+          echo "task_pair: banking/user_task_14/injection_task_5"
+          echo "top_level_seed: 1"
+          echo "learner_seed: 42"
+          echo "query_budget: 260"
+          echo "min_experiences_for_training: 1"
+          echo "grpo_num_generations: 8"
+          echo "grpo_num_iterations: 5"
+          echo "max_suffix_length: 30"
+
+          readonly -a AUTOINJECT_CMD=(
+            "${SHARED_REPO}/.venv-autoinject/bin/python" -u
+            -m rlpi.agentdojo.adaptive_agentdojo
+            exp_ident=meta-secalign-baseline-candidate-v1-banking-u14-i5
+            model=facebook/Meta-SecAlign-8B
+            suite=banking
+            query_budget=260
+            "user_tasks=[user_task_14]"
+            "injection_tasks=[injection_task_5]"
+            learner=trl_suffix_meta_secalign_repro
+            +learner.feedback_model=gemma-small
+            learner.grpo_num_generations=8
+            learner.grpo_num_iterations=5
+            learner.max_suffix_length=30
+            "hydra.run.dir=${RUN_DIR}"
+            hydra.job.chdir=false
+          )
+
+          echo "=== EXACT AUTOINJECT COMMAND ==="
+          printf '%q ' "${AUTOINJECT_CMD[@]}"
+          printf '\n'
+
+          echo "=== RUN FULL BASELINE-CANDIDATE EXPERIMENT ==="
+          "${AUTOINJECT_CMD[@]}"
+
+          echo "=== PERSIST BASELINE-CANDIDATE ARTIFACTS ==="
+          if ! mkdir -p "${RESULT_ROOT}/artifacts"; then
+            echo "WARNING: Could not create artifact directory: ${RESULT_ROOT}/artifacts" >&2
+          fi
+          if [[ -f "${PRIVATE_REPO}/checkpoint_state.json" ]]; then
+            cp "${PRIVATE_REPO}/checkpoint_state.json" "${RESULT_ROOT}/artifacts/" || \
+              echo "WARNING: Could not copy checkpoint_state.json" >&2
+          else
+            echo "WARNING: Missing artifact: ${PRIVATE_REPO}/checkpoint_state.json" >&2
+          fi
+          if [[ -f "${PRIVATE_REPO}/reward_stats.jsonl" ]]; then
+            cp "${PRIVATE_REPO}/reward_stats.jsonl" "${RESULT_ROOT}/artifacts/" || \
+              echo "WARNING: Could not copy reward_stats.jsonl" >&2
+          else
+            echo "WARNING: Missing artifact: ${PRIVATE_REPO}/reward_stats.jsonl" >&2
+          fi
+          if [[ -d "${PRIVATE_REPO}/grpo_training_outputs" ]]; then
+            cp -a "${PRIVATE_REPO}/grpo_training_outputs" "${RESULT_ROOT}/artifacts/" || \
+              echo "WARNING: Could not copy grpo_training_outputs" >&2
+          else
+            echo "WARNING: Missing artifact: ${PRIVATE_REPO}/grpo_training_outputs" >&2
+          fi
+
+          echo "=== FINAL EXPERIMENT SUMMARY FROM LOG ==="
+          grep -A20 'Final experiment summary:' "${JOB_LOG}"
+
+          echo "=== MACHINE-READABLE BASELINE-CANDIDATE ASSERTIONS ==="
+          "${SHARED_REPO}/.venv-autoinject/bin/python" - "${PRIVATE_REPO}" <<'PYASSERT'
+          import json
+          import math
+          import pathlib
+          import sys
+
+          run_dir = pathlib.Path(sys.argv[1])
+          checkpoint = json.loads((run_dir / "checkpoint_state.json").read_text())
+          reporting = checkpoint["experiment_reporting"]
+          print("experiment_reporting:", json.dumps(reporting, sort_keys=True))
+
+          required_positive = (
+              "victim_queries_outer",
+              "victim_queries_grpo",
+              "feedback_model_calls_grpo",
+          )
+          for field in required_positive:
+              if int(reporting.get(field, 0)) < 1:
+                  raise RuntimeError(
+                      f"Baseline-candidate failure: expected positive reporting counter: {field}"
+                  )
+
+          metrics_path = run_dir / "grpo_training_outputs" / "training_metrics.jsonl"
+          metrics = [json.loads(line) for line in metrics_path.read_text().splitlines() if line.strip()]
+          global_steps = [int(item.get("metrics", {}).get("global_step", 0) or 0) for item in metrics]
+          print("grpo_global_steps:", global_steps)
+          if not global_steps or max(global_steps) < 1:
+              raise RuntimeError(
+                  "Baseline-candidate failure: no completed GRPO optimizer step was recorded"
+              )
+
+          eval_path = run_dir / "grpo_training_outputs" / "grpo_evaluations.jsonl"
+          evaluations = [json.loads(line) for line in eval_path.read_text().splitlines() if line.strip()]
+          usable = []
+          continuous = []
+          for item in evaluations:
+              p0 = float(item.get("prob_0", 0.0))
+              p1 = float(item.get("prob_1", 0.0))
+              if all(math.isfinite(p) and 0.0 <= p <= 1.0 for p in (p0, p1)) and abs((p0 + p1) - 1.0) <= 1e-6:
+                  usable.append((p0, p1))
+                  if 0.0 < p0 < 1.0 and 0.0 < p1 < 1.0:
+                      continuous.append((p0, p1))
+          print("grpo_evaluations:", len(evaluations))
+          print("usable_feedback_probabilities:", len(usable))
+          print("first_usable_feedback_probability:", usable[0] if usable else None)
+          print("continuous_feedback_probabilities:", len(continuous))
+          print("first_continuous_feedback_probability:", continuous[0] if continuous else None)
+          if not usable:
+              raise RuntimeError(
+                  "Baseline-candidate failure: no usable feedback comparison probability was recorded"
+              )
+          if not continuous:
+              raise RuntimeError(
+                  "Baseline-candidate failure: all recorded feedback comparison probabilities were binary"
+              )
+          PYASSERT
+
+          echo "=== RESULT FILES ==="
+          find "${RESULT_ROOT}" -maxdepth 6 -type f -print | sort
+          echo "Baseline candidate v1 completed successfully."
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nrp-llm-token
+              key: NRP_LLM_TOKEN
+        - name: OPENAI_BASE_URL
+          value: https://ellm.nrp-nautilus.io/v1
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        - name: PYTHONNOUSERSITE
+          value: "1"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: HOME
+          value: /work/home
+        - name: TMPDIR
+          value: /work/tmp
+        - name: XDG_CACHE_HOME
+          value: /work/cache
+        - name: TORCH_HOME
+          value: /work/cache/torch
+        - name: HF_HOME
+          value: /work/cache/huggingface
+        - name: HF_HUB_CACHE
+          value: /model-cache
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: TRANSFORMERS_OFFLINE
+          value: "1"
+        - name: HF_MODULES_CACHE
+          value: /work/cache/huggingface/modules
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"
+        resources:
+          requests:
+            cpu: "4"
+            memory: 48Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: "4"
+            memory: 48Gi
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+          readOnly: true
+        - name: workspace
+          mountPath: /workspace/results
+          subPath: results
+        - name: workspace
+          mountPath: /model-cache
+          subPath: hf-cache
+          readOnly: true
+        - name: private-work
+          mountPath: /work
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace
+      - name: private-work
+        emptyDir:
+          sizeLimit: 64Gi

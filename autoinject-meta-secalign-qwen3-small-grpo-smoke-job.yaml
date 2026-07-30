@@ -36,9 +36,11 @@ spec:
                 - NVIDIA-H200-NVL
                 - NVIDIA-L40
                 - NVIDIA-L40S
+                - NVIDIA-RTX-5000-Ada-Generation
                 - NVIDIA-RTX-A6000
                 - NVIDIA-RTX-PRO-6000-Blackwell-Max-Q-Workstation-Edition
                 - Quadro-RTX-8000
+                - Tesla-V100-SXM2-32GB
       initContainers:
       - name: stage-pinned-qwen3-small-source
         image: alpine/git:v2.47.2

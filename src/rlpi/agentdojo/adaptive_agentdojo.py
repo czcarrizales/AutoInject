@@ -354,6 +354,7 @@ def _setup_pipeline_and_components(
     """Set up the pipeline, attacker, and learner components."""
     # Use common utility to set up pipeline and attacker
     max_tokens = cfg.get("max_tokens", None)
+    victim_device = cfg.get("victim_device", None)
     pipeline, attacker = setup_pipeline_and_attacker(
         model=model,
         defense=defense,
@@ -361,6 +362,7 @@ def _setup_pipeline_and_components(
         attack=attack,
         suite=suite,
         max_tokens=max_tokens,
+        victim_device=victim_device,
     )
 
     # Extract learner parameters from config, assuming they are under 'learner' key

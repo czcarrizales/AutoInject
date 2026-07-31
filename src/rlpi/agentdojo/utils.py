@@ -10,6 +10,7 @@ from omegaconf import DictConfig
 
 from agentdojo.agent_pipeline.agent_pipeline import (
     AgentPipeline,
+    LocalLLM,
     PipelineConfig,
 )
 from agentdojo.attacks.attack_registry import load_attack
@@ -73,11 +74,12 @@ def setup_pipeline_and_attacker(
     attack: str,
     suite: TaskSuite,
     max_tokens: Optional[int] = None,
+    victim_device: Optional[str] = None,
 ) -> Tuple[AgentPipeline, object]:
     """Set up the pipeline and attacker components (without learner)."""
     print(f"Creating pipeline with model: {model}")
     pipeline_config = PipelineConfig(
-        llm=model,
+        llm=LocalLLM(model.value, device=victim_device) if victim_device else model,
         defense=defense,
         system_message_name=None,
         system_message=system_message or "You are a helpful assistant.",

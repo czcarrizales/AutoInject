@@ -171,7 +171,7 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
         self.policy = AutoModelForCausalLM.from_pretrained(
             self.attack_model_name,
             torch_dtype=torch.float16,
-            device_map="auto",
+            device_map={"": self.device},
         )
 
         # Ensure model parameters are trainable (required for gradient checkpointing)
@@ -257,6 +257,13 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
         if self.verbose:
             logger.info("Model ready for GRPO training")
 
+        os.environ["ACCELERATE_TORCH_DEVICE"] = self.device
+        torch.cuda.set_device(self.device)
+        trainer_device = next(self.policy.parameters()).device
+        grpo_config._setup_devices = trainer_device
+        grpo_config.distributed_state.device = trainer_device
+        grpo_config._n_gpu = 1
+
         # Create new trainer with the actual reward function and dataset
         grpo_trainer = GRPOTrainer(
             model=self.policy,
@@ -265,6 +272,28 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
             args=grpo_config,
             processing_class=self.tokenizer,
         )
+
+        assert (
+            torch.device(self.device).index is None
+            or trainer_device == torch.device(self.device)
+        )
+        assert all(
+            parameter.device == trainer_device
+            for parameter in grpo_trainer.model.parameters()
+        )
+        if grpo_trainer.ref_model is not None:
+            assert all(
+                parameter.device == trainer_device
+                for parameter in grpo_trainer.ref_model.parameters()
+            )
+        assert grpo_trainer.args.device == trainer_device
+        assert grpo_trainer.accelerator.device == trainer_device
+        assert grpo_trainer.args.n_gpu == 1
+        assert not isinstance(grpo_trainer.model, torch.nn.DataParallel)
+        prepared_input_ids = grpo_trainer._prepare_input(
+            torch.empty(0, dtype=torch.long)
+        )
+        assert prepared_input_ids.device == trainer_device
 
         logger.info(
             f"Created new GRPO trainer instance with reward function: "

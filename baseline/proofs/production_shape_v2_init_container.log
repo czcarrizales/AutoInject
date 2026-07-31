@@ -1,0 +1,53 @@
++ EXPECTED_COMMIT=c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7
++ EXPECTED_PATCH_SHA256=1a5c6d59c5fde4e36538d6fa2ac3e281b6573373495ecddc8b03b26685a0eb1b
++ SOURCE_REPOSITORY=https://github.com/czcarrizales/AutoInject
++ SOURCE_BRANCH=experiments/qwen3-small-baseline-v1
++ PRIVATE_REPO=/work/AutoInject
++ PATCH=/runtime/placement.patch
++ test '!' -e /work/AutoInject
++ test -s /runtime/placement.patch
++ sha256sum /runtime/placement.patch
++ read -r ACTUAL_PATCH_SHA256 _
++ test 1a5c6d59c5fde4e36538d6fa2ac3e281b6573373495ecddc8b03b26685a0eb1b '=' 1a5c6d59c5fde4e36538d6fa2ac3e281b6573373495ecddc8b03b26685a0eb1b
++ mkdir /work/AutoInject
++ git -C /work/AutoInject init
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+Initialized empty Git repository in /work/AutoInject/.git/
++ git -C /work/AutoInject remote add origin https://github.com/czcarrizales/AutoInject
++ git -C /work/AutoInject fetch --no-tags origin refs/heads/experiments/qwen3-small-baseline-v1
+From https://github.com/czcarrizales/AutoInject
+ * branch            experiments/qwen3-small-baseline-v1 -> FETCH_HEAD
+ * [new branch]      experiments/qwen3-small-baseline-v1 -> origin/experiments/qwen3-small-baseline-v1
++ git -C /work/AutoInject rev-parse --verify 'FETCH_HEAD^{commit}'
++ BRANCH_TIP=19ae680a4bf79f1094b74e9f11714596c5af33c1
++ git -C /work/AutoInject cat-file -e 'c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7^{commit}'
++ git -C /work/AutoInject merge-base --is-ancestor c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7 19ae680a4bf79f1094b74e9f11714596c5af33c1
++ git -C /work/AutoInject checkout --detach c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7
+HEAD is now at c4eedbd Restore frozen AutoInject semantics for qwen3-small baseline
++ git -C /work/AutoInject rev-parse HEAD
++ test c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7 '=' c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7
++ git -C /work/AutoInject status --porcelain
++ test -z 
++ git -C /work/AutoInject apply --check /runtime/placement.patch
++ git -C /work/AutoInject apply /runtime/placement.patch
++ git -C /work/AutoInject diff --check
++ git -C /work/AutoInject diff --name-only
++ test 'agentdojo/src/agentdojo/agent_pipeline/agent_pipeline.py
+src/rlpi/agentdojo/adaptive_agentdojo.py
+src/rlpi/agentdojo/config/config.yaml
+src/rlpi/agentdojo/utils.py
+src/rlpi/attack/learners/trl_suffix/learner.py' '=' 'agentdojo/src/agentdojo/agent_pipeline/agent_pipeline.py
+src/rlpi/agentdojo/adaptive_agentdojo.py
+src/rlpi/agentdojo/config/config.yaml
+src/rlpi/agentdojo/utils.py
+src/rlpi/attack/learners/trl_suffix/learner.py'
++ printf '%s\n' c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7

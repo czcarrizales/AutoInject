@@ -243,7 +243,6 @@ class Qwen3SmallFrozenFidelityTests(unittest.TestCase):
             "src/rlpi/agentdojo/config/learner/trl_suffix.yaml",
             "src/rlpi/agentdojo/config/learner/"
             "trl_suffix_meta_secalign_repro.yaml",
-            "src/rlpi/attack/learners/trl_suffix/learner.py",
             "src/rlpi/attack/learners/trl_suffix/reward_utils.py",
             "src/rlpi/attack/learners/trl_suffix/utils.py",
         )
@@ -259,6 +258,54 @@ class Qwen3SmallFrozenFidelityTests(unittest.TestCase):
                 self.assertEqual(
                     (REPOSITORY_ROOT / path).read_text(), frozen
                 )
+
+        learner_path = "src/rlpi/attack/learners/trl_suffix/learner.py"
+        frozen = subprocess.run(
+            ["git", "show", f"{FROZEN_COMMIT}:{learner_path}"],
+            cwd=REPOSITORY_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        corrected = (REPOSITORY_ROOT / learner_path).read_text().replace(
+            'device_map={"": self.device},',
+            'device_map="auto",',
+            1,
+        ).replace(
+            '        os.environ["ACCELERATE_TORCH_DEVICE"] = self.device\n'
+            "        torch.cuda.set_device(self.device)\n"
+            "        trainer_device = next(self.policy.parameters()).device\n"
+            "        grpo_config._setup_devices = trainer_device\n"
+            "        grpo_config.distributed_state.device = trainer_device\n"
+            "        grpo_config._n_gpu = 1\n\n",
+            "",
+            1,
+        ).replace(
+            "        assert (\n"
+            "            torch.device(self.device).index is None\n"
+            "            or trainer_device == torch.device(self.device)\n"
+            "        )\n"
+            "        assert all(\n"
+            "            parameter.device == trainer_device\n"
+            "            for parameter in grpo_trainer.model.parameters()\n"
+            "        )\n"
+            "        if grpo_trainer.ref_model is not None:\n"
+            "            assert all(\n"
+            "                parameter.device == trainer_device\n"
+            "                for parameter in grpo_trainer.ref_model.parameters()\n"
+            "            )\n"
+            "        assert grpo_trainer.args.device == trainer_device\n"
+            "        assert grpo_trainer.accelerator.device == trainer_device\n"
+            "        assert grpo_trainer.args.n_gpu == 1\n"
+            "        assert not isinstance(grpo_trainer.model, torch.nn.DataParallel)\n"
+            "        prepared_input_ids = grpo_trainer._prepare_input(\n"
+            "            torch.empty(0, dtype=torch.long)\n"
+            "        )\n"
+            "        assert prepared_input_ids.device == trainer_device\n\n",
+            "",
+            1,
+        )
+        self.assertEqual(corrected, frozen)
 
         feedback_path = (
             "src/rlpi/attack/learners/common/feedback_utils.py"

@@ -6,6 +6,7 @@ defaults:
 # Experiment settings
 exp_ident: debug
 model: meta-llama/Llama-3.1-8B
+victim_device: null
 model_id: null
 suite: travel
 query_budget: 500

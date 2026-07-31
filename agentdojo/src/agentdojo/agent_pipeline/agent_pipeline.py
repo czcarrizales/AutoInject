@@ -205,7 +205,7 @@ If you think you will need to call multiple tools in multiple stages, but you do
                     model,
                     dtype=torch_dtype,
                     trust_remote_code=trust_remote_code,
-                    device_map="auto",
+                    device_map={"": device},
                 )
             self.model.eval()
         

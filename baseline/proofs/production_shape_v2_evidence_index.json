@@ -1,0 +1,50 @@
+{
+  "description": "Recovered production-shape-v2 evidence index; large artifacts remain in Kubernetes/PVC storage.",
+  "job": "autoinject-qwen3-small-two-v100-production-shape-proof-v2",
+  "namespace": "ucr-rai-chazz",
+  "pod": "autoinject-qwen3-small-two-v100-production-shape-proof-v2-z7jx4",
+  "proof_completed_utc": "2026-07-31T17:14:54Z",
+  "records": [
+    {
+      "description": "Local submitted proof-v2 manifest",
+      "path": "/home/chazz/research/ucr-rai/repos/AutoInject-baseline/autoinject-qwen3-small-two-v100-production-shape-proof-v2.yaml",
+      "sha256": "f17c8a691f45581a821774cfe7d703f1558387ada0504fd3c3f82b486da91058",
+      "size_bytes": 34330
+    },
+    {
+      "description": "Recovered Kubernetes Job YAML",
+      "path": "kubernetes://ucr-rai-chazz/jobs/autoinject-qwen3-small-two-v100-production-shape-proof-v2",
+      "sha256": "1a1c33ba9e0c0b5b9431485b421511ba3c96f69812ae93bfb6f4d2cefc68355a",
+      "size_bytes": 53692
+    },
+    {
+      "description": "Recovered Kubernetes Pod YAML",
+      "path": "kubernetes://ucr-rai-chazz/pods/autoinject-qwen3-small-two-v100-production-shape-proof-v2-z7jx4",
+      "sha256": "3b0e68ed2298fb3dc06e2661329ef4a34d427fdf5d5d1adf2cb1e655ed0f912a",
+      "size_bytes": 31558
+    },
+    {
+      "description": "Recovered main-container log",
+      "path": "kubernetes://ucr-rai-chazz/pods/autoinject-qwen3-small-two-v100-production-shape-proof-v2-z7jx4/log?container=autoinject-qwen3-small",
+      "sha256": "555c445e2dbbfaf7dd9e778fa1b56ee043b71286d2a4e502af8ef4b9e622acf8",
+      "size_bytes": 106324
+    },
+    {
+      "description": "Recovered immutable init-container log copied locally",
+      "path": "baseline/proofs/production_shape_v2_init_container.log",
+      "sha256": "0a5ddd1e566930b4b0a78c10e1a503dd00beaccb43eed2024c372d58d765219f",
+      "size_bytes": 3007
+    }
+  ],
+  "persistent_root": "/workspace/results/autoinject-qwen3-small/two-v100-production-shape-proof-v2/qwen3-small-two-v100-20260731T163728Z-389e3537-1755-4b40-af90-15f1f3b70395",
+  "persistent_files_not_locally_recovered": [
+    "production-shape-proof.json",
+    "checkpoint-reload-report.json",
+    "gpu-memory-summary.json",
+    "gpu-memory.csv",
+    "job.log",
+    "run/checkpoint.pt",
+    "run/checkpoint_state.json"
+  ],
+  "unavailable_reason": "The PVC is not locally mounted; creating a reader Pod was forbidden. Historical Kubernetes events had expired. File-level size, hash, and creation timestamps therefore cannot be reported without inventing evidence."
+}

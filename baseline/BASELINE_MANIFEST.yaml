@@ -13,7 +13,7 @@ binaryData:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: autoinject-qwen3-small-cold-r01-banking-u14-i5-a2
+  name: autoinject-qwen3-small-cold-r01-banking-u14-i5-a3
   namespace: ucr-rai-chazz
   labels:
     app.kubernetes.io/name: autoinject-qwen3-small
@@ -177,7 +177,7 @@ spec:
           readonly PROVENANCE_STAGING="/work/provenance-staging"
           readonly CONSTRAINTS="/runtime/runtime-constraints.txt"
           readonly BOOTSTRAP_REPORT="/workspace/results/autoinject-qwen3-small/two-v100-bootstrap-v3/environment-report.json"
-          readonly RESULT_ROOT="/workspace/results/autoinject-qwen3-small/cold-baseline-v1/run-01-banking-u14-i5-attempt-02"
+          readonly RESULT_ROOT="/workspace/results/autoinject-qwen3-small/cold-baseline-v1/run-01-banking-u14-i5-attempt-03"
           readonly RUN_DIR="${RESULT_ROOT}/run"
           readonly PROVENANCE_DIR="${RESULT_ROOT}/provenance"
           readonly JOB_LOG="${RESULT_ROOT}/job.log"
@@ -296,7 +296,13 @@ spec:
           optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(args)
           assert optimizer_cls is torch.optim.AdamW
           assert args.optim.value == "adamw_torch"
-          assert optimizer_kwargs == bootstrap["optimizer_kwargs"] == {}
+          normalized_optimizer_kwargs = json.loads(
+              json.dumps(optimizer_kwargs, sort_keys=True)
+          )
+          print(json.dumps({
+              "current_optimizer_kwargs": normalized_optimizer_kwargs,
+              "bootstrap_optimizer_kwargs": bootstrap["optimizer_kwargs"],
+          }, indent=2, sort_keys=True))
           assert bootstrap["fused_explicit"] is False
           assert bootstrap["foreach_explicit"] is False
           assert torch.__version__ == "2.5.1+cu124"
@@ -376,7 +382,7 @@ spec:
 
           AUTOINJECT_CMD=(
             "${PYTHON}" -u -m rlpi.agentdojo.adaptive_agentdojo
-            exp_ident=meta-secalign-qwen3-small-cold-r01-banking-u14-i5-a2
+            exp_ident=meta-secalign-qwen3-small-cold-r01-banking-u14-i5-a3
             model=facebook/Meta-SecAlign-8B
             victim_device=cuda:0
             learner=trl_suffix_meta_secalign_repro

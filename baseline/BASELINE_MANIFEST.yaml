@@ -13,11 +13,11 @@ binaryData:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: autoinject-qwen3-small-two-v100-cold-baseline-v1-r01
+  name: autoinject-qwen3-small-cold-r01-banking-u14-i5-a2
   namespace: ucr-rai-chazz
   labels:
     app.kubernetes.io/name: autoinject-qwen3-small
-    app.kubernetes.io/instance: qwen3-small-two-v100-cold-baseline-v1-r01
+    app.kubernetes.io/instance: qwen3-small-cold-r01-banking-u14-i5-a2
     autoinject-run-kind: official-cold-baseline
 spec:
   backoffLimit: 0
@@ -26,7 +26,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: autoinject-qwen3-small
-        app.kubernetes.io/instance: qwen3-small-two-v100-cold-baseline-v1-r01
+        app.kubernetes.io/instance: qwen3-small-cold-r01-banking-u14-i5-a2
         autoinject-run-kind: official-cold-baseline
     spec:
       automountServiceAccountToken: false
@@ -56,6 +56,7 @@ spec:
           SOURCE_BRANCH="experiments/qwen3-small-baseline-v1"
           PRIVATE_REPO="/work/AutoInject"
           PATCH="/runtime/placement.patch"
+          PROVENANCE_STAGING="/work/provenance-staging"
 
           command -v git
           command -v timeout
@@ -93,12 +94,31 @@ spec:
           )"
           ACTUAL_CHANGED_FILES="$(git -C "${PRIVATE_REPO}" diff --name-only)"
           test "${ACTUAL_CHANGED_FILES}" = "${EXPECTED_CHANGED_FILES}"
-          printf '%s\n' "${EXPECTED_COMMIT}" > /work/source-commit.txt
-          printf '%s\n' "${SOURCE_BRANCH}" > /work/source-branch.txt
-          printf '%s\n' "${BRANCH_TIP}" > /work/baseline-freeze-commit.txt
+          mkdir "${PROVENANCE_STAGING}"
+          RUNTIME_BRANCH="$(git -C "${PRIVATE_REPO}" branch --show-current)"
+          printf '%s\n' "${RUNTIME_BRANCH:-DETACHED}" \
+            > "${PROVENANCE_STAGING}/runtime-branch.txt"
+          git -C "${PRIVATE_REPO}" rev-parse HEAD \
+            > "${PROVENANCE_STAGING}/runtime-head.txt"
+          git -C "${PRIVATE_REPO}" status --porcelain=v1 \
+            > "${PROVENANCE_STAGING}/runtime-git-status.txt"
+          git -C "${PRIVATE_REPO}" diff --binary \
+            > "${PROVENANCE_STAGING}/runtime-placement.patch"
+          sha256sum "${PROVENANCE_STAGING}/runtime-placement.patch" \
+            > "${PROVENANCE_STAGING}/runtime-placement.patch.sha256"
+          test "$(cut -d' ' -f1 "${PROVENANCE_STAGING}/runtime-placement.patch.sha256")" \
+            = "${EXPECTED_PATCH_SHA256}"
+          printf '%s\n' "${EXPECTED_COMMIT}" \
+            > "${PROVENANCE_STAGING}/source-commit.txt"
+          printf '%s\n' "${SOURCE_BRANCH}" \
+            > "${PROVENANCE_STAGING}/source-branch.txt"
+          printf '%s\n' "${BRANCH_TIP}" \
+            > "${PROVENANCE_STAGING}/baseline-freeze-commit.txt"
           git -C "${PRIVATE_REPO}" show \
             "${BRANCH_TIP}:baseline/BASELINE_MANIFEST.yaml" \
-            | sha256sum > /work/baseline-manifest.sha256
+            > "${PROVENANCE_STAGING}/baseline-manifest.yaml"
+          sha256sum "${PROVENANCE_STAGING}/baseline-manifest.yaml" \
+            > "${PROVENANCE_STAGING}/baseline-manifest.sha256"
         resources:
           requests:
             cpu: 250m
@@ -154,9 +174,10 @@ spec:
           readonly EXPECTED_IMAGE="pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel"
           readonly PYTHON="/opt/conda/bin/python"
           readonly PRIVATE_REPO="/work/AutoInject"
+          readonly PROVENANCE_STAGING="/work/provenance-staging"
           readonly CONSTRAINTS="/runtime/runtime-constraints.txt"
           readonly BOOTSTRAP_REPORT="/workspace/results/autoinject-qwen3-small/two-v100-bootstrap-v3/environment-report.json"
-          readonly RESULT_ROOT="/workspace/results/autoinject-qwen3-small/cold-baseline-v1/run-01-banking-u14-i5"
+          readonly RESULT_ROOT="/workspace/results/autoinject-qwen3-small/cold-baseline-v1/run-01-banking-u14-i5-attempt-02"
           readonly RUN_DIR="${RESULT_ROOT}/run"
           readonly PROVENANCE_DIR="${RESULT_ROOT}/provenance"
           readonly JOB_LOG="${RESULT_ROOT}/job.log"
@@ -198,10 +219,8 @@ spec:
           test -x "${PYTHON}"
           test -s "${CONSTRAINTS}"
           test -s "${BOOTSTRAP_REPORT}"
-          test "$(cat /work/source-commit.txt)" = "${EXPECTED_COMMIT}"
-          read -r ACTUAL_PATCH_SHA256 _ < /work/placement-patch.sha256
-          test "${ACTUAL_PATCH_SHA256}" = "${EXPECTED_PATCH_SHA256}"
-          for utility in bash cat date find git mkdir nvidia-smi sha256sum tee timeout; do
+          test -d "${PROVENANCE_STAGING}"
+          for utility in bash cat cp cut date find mkdir nvidia-smi sha256sum tee timeout; do
             command -v "${utility}"
           done
           cd "${PRIVATE_REPO}"
@@ -212,28 +231,21 @@ spec:
           timeout 1800 "${PYTHON}" -m pip install \
             --constraint "${CONSTRAINTS}" --editable .
 
-          RUNTIME_BRANCH="$(git branch --show-current)"
-          printf '%s\n' "${RUNTIME_BRANCH:-DETACHED}" \
-            > "${PROVENANCE_DIR}/runtime-branch.txt"
-          git rev-parse HEAD > "${PROVENANCE_DIR}/runtime-head.txt"
-          git status --porcelain=v1 > "${PROVENANCE_DIR}/runtime-git-status.txt"
-          git diff --binary > "${PROVENANCE_DIR}/runtime-placement.patch"
-          sha256sum "${PROVENANCE_DIR}/runtime-placement.patch" \
-            > "${PROVENANCE_DIR}/runtime-placement.patch.sha256"
-          test "$(cut -d' ' -f1 "${PROVENANCE_DIR}/runtime-placement.patch.sha256")" \
-            = "${EXPECTED_PATCH_SHA256}"
-          cp /work/source-commit.txt /work/source-branch.txt \
-            /work/baseline-freeze-commit.txt \
-            /work/baseline-manifest.sha256 /work/placement-patch.sha256 \
-            "${PROVENANCE_DIR}/"
-          readonly BASELINE_FREEZE_COMMIT="$(cat /work/baseline-freeze-commit.txt)"
-          git show "${BASELINE_FREEZE_COMMIT}:baseline/BASELINE_MANIFEST.yaml" \
-            > "${PROVENANCE_DIR}/baseline-manifest.yaml"
-          sha256sum "${PROVENANCE_DIR}/baseline-manifest.yaml" \
-            > "${PROVENANCE_DIR}/baseline-manifest.runtime.sha256"
-          read -r EXPECTED_MANIFEST_SHA256 _ < /work/baseline-manifest.sha256
-          read -r ACTUAL_MANIFEST_SHA256 _ \
-            < "${PROVENANCE_DIR}/baseline-manifest.runtime.sha256"
+          cp "${PROVENANCE_STAGING}/"* "${PROVENANCE_DIR}/"
+          test "$(cat "${PROVENANCE_DIR}/source-commit.txt")" \
+            = "${EXPECTED_COMMIT}"
+          read -r STAGED_PATCH_SHA256 _ \
+            < "${PROVENANCE_DIR}/runtime-placement.patch.sha256"
+          ACTUAL_PATCH_SHA256="$(
+            sha256sum "${PROVENANCE_DIR}/runtime-placement.patch" | cut -d' ' -f1
+          )"
+          test "${STAGED_PATCH_SHA256}" = "${EXPECTED_PATCH_SHA256}"
+          test "${ACTUAL_PATCH_SHA256}" = "${EXPECTED_PATCH_SHA256}"
+          read -r EXPECTED_MANIFEST_SHA256 _ \
+            < "${PROVENANCE_DIR}/baseline-manifest.sha256"
+          ACTUAL_MANIFEST_SHA256="$(
+            sha256sum "${PROVENANCE_DIR}/baseline-manifest.yaml" | cut -d' ' -f1
+          )"
           test "${ACTUAL_MANIFEST_SHA256}" = "${EXPECTED_MANIFEST_SHA256}"
 
           nvidia-smi
@@ -364,7 +376,7 @@ spec:
 
           AUTOINJECT_CMD=(
             "${PYTHON}" -u -m rlpi.agentdojo.adaptive_agentdojo
-            exp_ident=meta-secalign-qwen3-small-two-v100-cold-baseline-v1-r01-banking-u14-i5
+            exp_ident=meta-secalign-qwen3-small-cold-r01-banking-u14-i5-a2
             model=facebook/Meta-SecAlign-8B
             victim_device=cuda:0
             learner=trl_suffix_meta_secalign_repro

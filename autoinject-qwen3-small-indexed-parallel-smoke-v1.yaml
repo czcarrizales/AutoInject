@@ -1,0 +1,570 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoinject-qwen3-small-indexed-parallel-smoke-v1-runtime
+  namespace: ucr-rai-chazz
+immutable: true
+data:
+  runtime-constraints.txt: |
+    torch==2.5.1
+binaryData:
+  placement.patch: ZGlmZiAtLWdpdCBhL2FnZW50ZG9qby9zcmMvYWdlbnRkb2pvL2FnZW50X3BpcGVsaW5lL2FnZW50X3BpcGVsaW5lLnB5IGIvYWdlbnRkb2pvL3NyYy9hZ2VudGRvam8vYWdlbnRfcGlwZWxpbmUvYWdlbnRfcGlwZWxpbmUucHkKaW5kZXggOGQzNTIwMC4uZjUyNWJkNyAxMDA2NDQKLS0tIGEvYWdlbnRkb2pvL3NyYy9hZ2VudGRvam8vYWdlbnRfcGlwZWxpbmUvYWdlbnRfcGlwZWxpbmUucHkKKysrIGIvYWdlbnRkb2pvL3NyYy9hZ2VudGRvam8vYWdlbnRfcGlwZWxpbmUvYWdlbnRfcGlwZWxpbmUucHkKQEAgLTIwNSw3ICsyMDUsNyBAQCBJZiB5b3UgdGhpbmsgeW91IHdpbGwgbmVlZCB0byBjYWxsIG11bHRpcGxlIHRvb2xzIGluIG11bHRpcGxlIHN0YWdlcywgYnV0IHlvdSBkbwogICAgICAgICAgICAgICAgICAgICBtb2RlbCwKICAgICAgICAgICAgICAgICAgICAgZHR5cGU9dG9yY2hfZHR5cGUsCiAgICAgICAgICAgICAgICAgICAgIHRydXN0X3JlbW90ZV9jb2RlPXRydXN0X3JlbW90ZV9jb2RlLAotICAgICAgICAgICAgICAgICAgICBkZXZpY2VfbWFwPSJhdXRvIiwKKyAgICAgICAgICAgICAgICAgICAgZGV2aWNlX21hcD17IiI6IGRldmljZX0sCiAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgc2VsZi5tb2RlbC5ldmFsKCkKICAgICAgICAgCmRpZmYgLS1naXQgYS9zcmMvcmxwaS9hZ2VudGRvam8vYWRhcHRpdmVfYWdlbnRkb2pvLnB5IGIvc3JjL3JscGkvYWdlbnRkb2pvL2FkYXB0aXZlX2FnZW50ZG9qby5weQppbmRleCBkNjczOWE2Li44NzM0ZjMyIDEwMDY0NAotLS0gYS9zcmMvcmxwaS9hZ2VudGRvam8vYWRhcHRpdmVfYWdlbnRkb2pvLnB5CisrKyBiL3NyYy9ybHBpL2FnZW50ZG9qby9hZGFwdGl2ZV9hZ2VudGRvam8ucHkKQEAgLTM1NCw2ICszNTQsNyBAQCBkZWYgX3NldHVwX3BpcGVsaW5lX2FuZF9jb21wb25lbnRzKAogICAgICIiIlNldCB1cCB0aGUgcGlwZWxpbmUsIGF0dGFja2VyLCBhbmQgbGVhcm5lciBjb21wb25lbnRzLiIiIgogICAgICMgVXNlIGNvbW1vbiB1dGlsaXR5IHRvIHNldCB1cCBwaXBlbGluZSBhbmQgYXR0YWNrZXIKICAgICBtYXhfdG9rZW5zID0gY2ZnLmdldCgibWF4X3Rva2VucyIsIE5vbmUpCisgICAgdmljdGltX2RldmljZSA9IGNmZy5nZXQoInZpY3RpbV9kZXZpY2UiLCBOb25lKQogICAgIHBpcGVsaW5lLCBhdHRhY2tlciA9IHNldHVwX3BpcGVsaW5lX2FuZF9hdHRhY2tlcigKICAgICAgICAgbW9kZWw9bW9kZWwsCiAgICAgICAgIGRlZmVuc2U9ZGVmZW5zZSwKQEAgLTM2MSw2ICszNjIsNyBAQCBkZWYgX3NldHVwX3BpcGVsaW5lX2FuZF9jb21wb25lbnRzKAogICAgICAgICBhdHRhY2s9YXR0YWNrLAogICAgICAgICBzdWl0ZT1zdWl0ZSwKICAgICAgICAgbWF4X3Rva2Vucz1tYXhfdG9rZW5zLAorICAgICAgICB2aWN0aW1fZGV2aWNlPXZpY3RpbV9kZXZpY2UsCiAgICAgKQogCiAgICAgIyBFeHRyYWN0IGxlYXJuZXIgcGFyYW1ldGVycyBmcm9tIGNvbmZpZywgYXNzdW1pbmcgdGhleSBhcmUgdW5kZXIgJ2xlYXJuZXInIGtleQpkaWZmIC0tZ2l0IGEvc3JjL3JscGkvYWdlbnRkb2pvL2NvbmZpZy9jb25maWcueWFtbCBiL3NyYy9ybHBpL2FnZW50ZG9qby9jb25maWcvY29uZmlnLnlhbWwKaW5kZXggN2YxYzMyZS4uZDZhMTNmYSAxMDA2NDQKLS0tIGEvc3JjL3JscGkvYWdlbnRkb2pvL2NvbmZpZy9jb25maWcueWFtbAorKysgYi9zcmMvcmxwaS9hZ2VudGRvam8vY29uZmlnL2NvbmZpZy55YW1sCkBAIC02LDYgKzYsNyBAQCBkZWZhdWx0czoKICMgRXhwZXJpbWVudCBzZXR0aW5ncwogZXhwX2lkZW50OiBkZWJ1ZwogbW9kZWw6IG1ldGEtbGxhbWEvTGxhbWEtMy4xLThCCit2aWN0aW1fZGV2aWNlOiBudWxsCiBtb2RlbF9pZDogbnVsbAogc3VpdGU6IHRyYXZlbAogcXVlcnlfYnVkZ2V0OiA1MDAKZGlmZiAtLWdpdCBhL3NyYy9ybHBpL2FnZW50ZG9qby91dGlscy5weSBiL3NyYy9ybHBpL2FnZW50ZG9qby91dGlscy5weQppbmRleCBkMDQ0MDE0Li45Y2U3OWQxIDEwMDY0NAotLS0gYS9zcmMvcmxwaS9hZ2VudGRvam8vdXRpbHMucHkKKysrIGIvc3JjL3JscGkvYWdlbnRkb2pvL3V0aWxzLnB5CkBAIC0xMCw2ICsxMCw3IEBAIGZyb20gb21lZ2Fjb25mIGltcG9ydCBEaWN0Q29uZmlnCiAKIGZyb20gYWdlbnRkb2pvLmFnZW50X3BpcGVsaW5lLmFnZW50X3BpcGVsaW5lIGltcG9ydCAoCiAgICAgQWdlbnRQaXBlbGluZSwKKyAgICBMb2NhbExMTSwKICAgICBQaXBlbGluZUNvbmZpZywKICkKIGZyb20gYWdlbnRkb2pvLmF0dGFja3MuYXR0YWNrX3JlZ2lzdHJ5IGltcG9ydCBsb2FkX2F0dGFjawpAQCAtNzMsMTEgKzc0LDEyIEBAIGRlZiBzZXR1cF9waXBlbGluZV9hbmRfYXR0YWNrZXIoCiAgICAgYXR0YWNrOiBzdHIsCiAgICAgc3VpdGU6IFRhc2tTdWl0ZSwKICAgICBtYXhfdG9rZW5zOiBPcHRpb25hbFtpbnRdID0gTm9uZSwKKyAgICB2aWN0aW1fZGV2aWNlOiBPcHRpb25hbFtzdHJdID0gTm9uZSwKICkgLT4gVHVwbGVbQWdlbnRQaXBlbGluZSwgb2JqZWN0XToKICAgICAiIiJTZXQgdXAgdGhlIHBpcGVsaW5lIGFuZCBhdHRhY2tlciBjb21wb25lbnRzICh3aXRob3V0IGxlYXJuZXIpLiIiIgogICAgIHByaW50KGYiQ3JlYXRpbmcgcGlwZWxpbmUgd2l0aCBtb2RlbDoge21vZGVsfSIpCiAgICAgcGlwZWxpbmVfY29uZmlnID0gUGlwZWxpbmVDb25maWcoCi0gICAgICAgIGxsbT1tb2RlbCwKKyAgICAgICAgbGxtPUxvY2FsTExNKG1vZGVsLnZhbHVlLCBkZXZpY2U9dmljdGltX2RldmljZSkgaWYgdmljdGltX2RldmljZSBlbHNlIG1vZGVsLAogICAgICAgICBkZWZlbnNlPWRlZmVuc2UsCiAgICAgICAgIHN5c3RlbV9tZXNzYWdlX25hbWU9Tm9uZSwKICAgICAgICAgc3lzdGVtX21lc3NhZ2U9c3lzdGVtX21lc3NhZ2Ugb3IgIllvdSBhcmUgYSBoZWxwZnVsIGFzc2lzdGFudC4iLApkaWZmIC0tZ2l0IGEvc3JjL3JscGkvYXR0YWNrL2xlYXJuZXJzL3RybF9zdWZmaXgvbGVhcm5lci5weSBiL3NyYy9ybHBpL2F0dGFjay9sZWFybmVycy90cmxfc3VmZml4L2xlYXJuZXIucHkKaW5kZXggMGE1NWJiOC4uZmUyODI4MiAxMDA2NDQKLS0tIGEvc3JjL3JscGkvYXR0YWNrL2xlYXJuZXJzL3RybF9zdWZmaXgvbGVhcm5lci5weQorKysgYi9zcmMvcmxwaS9hdHRhY2svbGVhcm5lcnMvdHJsX3N1ZmZpeC9sZWFybmVyLnB5CkBAIC0xNzEsNyArMTcxLDcgQEAgY2xhc3MgVFJMU3VmZml4TGVhcm5lcihBZGFwdGl2ZUF0dGFja0xlYXJuZXIpOgogICAgICAgICBzZWxmLnBvbGljeSA9IEF1dG9Nb2RlbEZvckNhdXNhbExNLmZyb21fcHJldHJhaW5lZCgKICAgICAgICAgICAgIHNlbGYuYXR0YWNrX21vZGVsX25hbWUsCiAgICAgICAgICAgICB0b3JjaF9kdHlwZT10b3JjaC5mbG9hdDE2LAotICAgICAgICAgICAgZGV2aWNlX21hcD0iYXV0byIsCisgICAgICAgICAgICBkZXZpY2VfbWFwPXsiIjogc2VsZi5kZXZpY2V9LAogICAgICAgICApCiAKICAgICAgICAgIyBFbnN1cmUgbW9kZWwgcGFyYW1ldGVycyBhcmUgdHJhaW5hYmxlIChyZXF1aXJlZCBmb3IgZ3JhZGllbnQgY2hlY2twb2ludGluZykKQEAgLTI1Nyw2ICsyNTcsMTMgQEAgY2xhc3MgVFJMU3VmZml4TGVhcm5lcihBZGFwdGl2ZUF0dGFja0xlYXJuZXIpOgogICAgICAgICBpZiBzZWxmLnZlcmJvc2U6CiAgICAgICAgICAgICBsb2dnZXIuaW5mbygiTW9kZWwgcmVhZHkgZm9yIEdSUE8gdHJhaW5pbmciKQogCisgICAgICAgIG9zLmVudmlyb25bIkFDQ0VMRVJBVEVfVE9SQ0hfREVWSUNFIl0gPSBzZWxmLmRldmljZQorICAgICAgICB0b3JjaC5jdWRhLnNldF9kZXZpY2Uoc2VsZi5kZXZpY2UpCisgICAgICAgIHRyYWluZXJfZGV2aWNlID0gbmV4dChzZWxmLnBvbGljeS5wYXJhbWV0ZXJzKCkpLmRldmljZQorICAgICAgICBncnBvX2NvbmZpZy5fc2V0dXBfZGV2aWNlcyA9IHRyYWluZXJfZGV2aWNlCisgICAgICAgIGdycG9fY29uZmlnLmRpc3RyaWJ1dGVkX3N0YXRlLmRldmljZSA9IHRyYWluZXJfZGV2aWNlCisgICAgICAgIGdycG9fY29uZmlnLl9uX2dwdSA9IDEKKwogICAgICAgICAjIENyZWF0ZSBuZXcgdHJhaW5lciB3aXRoIHRoZSBhY3R1YWwgcmV3YXJkIGZ1bmN0aW9uIGFuZCBkYXRhc2V0CiAgICAgICAgIGdycG9fdHJhaW5lciA9IEdSUE9UcmFpbmVyKAogICAgICAgICAgICAgbW9kZWw9c2VsZi5wb2xpY3ksCkBAIC0yNjYsNiArMjczLDI4IEBAIGNsYXNzIFRSTFN1ZmZpeExlYXJuZXIoQWRhcHRpdmVBdHRhY2tMZWFybmVyKToKICAgICAgICAgICAgIHByb2Nlc3NpbmdfY2xhc3M9c2VsZi50b2tlbml6ZXIsCiAgICAgICAgICkKIAorICAgICAgICBhc3NlcnQgKAorICAgICAgICAgICAgdG9yY2guZGV2aWNlKHNlbGYuZGV2aWNlKS5pbmRleCBpcyBOb25lCisgICAgICAgICAgICBvciB0cmFpbmVyX2RldmljZSA9PSB0b3JjaC5kZXZpY2Uoc2VsZi5kZXZpY2UpCisgICAgICAgICkKKyAgICAgICAgYXNzZXJ0IGFsbCgKKyAgICAgICAgICAgIHBhcmFtZXRlci5kZXZpY2UgPT0gdHJhaW5lcl9kZXZpY2UKKyAgICAgICAgICAgIGZvciBwYXJhbWV0ZXIgaW4gZ3Jwb190cmFpbmVyLm1vZGVsLnBhcmFtZXRlcnMoKQorICAgICAgICApCisgICAgICAgIGlmIGdycG9fdHJhaW5lci5yZWZfbW9kZWwgaXMgbm90IE5vbmU6CisgICAgICAgICAgICBhc3NlcnQgYWxsKAorICAgICAgICAgICAgICAgIHBhcmFtZXRlci5kZXZpY2UgPT0gdHJhaW5lcl9kZXZpY2UKKyAgICAgICAgICAgICAgICBmb3IgcGFyYW1ldGVyIGluIGdycG9fdHJhaW5lci5yZWZfbW9kZWwucGFyYW1ldGVycygpCisgICAgICAgICAgICApCisgICAgICAgIGFzc2VydCBncnBvX3RyYWluZXIuYXJncy5kZXZpY2UgPT0gdHJhaW5lcl9kZXZpY2UKKyAgICAgICAgYXNzZXJ0IGdycG9fdHJhaW5lci5hY2NlbGVyYXRvci5kZXZpY2UgPT0gdHJhaW5lcl9kZXZpY2UKKyAgICAgICAgYXNzZXJ0IGdycG9fdHJhaW5lci5hcmdzLm5fZ3B1ID09IDEKKyAgICAgICAgYXNzZXJ0IG5vdCBpc2luc3RhbmNlKGdycG9fdHJhaW5lci5tb2RlbCwgdG9yY2gubm4uRGF0YVBhcmFsbGVsKQorICAgICAgICBwcmVwYXJlZF9pbnB1dF9pZHMgPSBncnBvX3RyYWluZXIuX3ByZXBhcmVfaW5wdXQoCisgICAgICAgICAgICB0b3JjaC5lbXB0eSgwLCBkdHlwZT10b3JjaC5sb25nKQorICAgICAgICApCisgICAgICAgIGFzc2VydCBwcmVwYXJlZF9pbnB1dF9pZHMuZGV2aWNlID09IHRyYWluZXJfZGV2aWNlCisKICAgICAgICAgbG9nZ2VyLmluZm8oCiAgICAgICAgICAgICBmIkNyZWF0ZWQgbmV3IEdSUE8gdHJhaW5lciBpbnN0YW5jZSB3aXRoIHJld2FyZCBmdW5jdGlvbjogIgogICAgICAgICAgICAgZiJ7dHlwZShyZXdhcmRfZnVuY3Rpb24pLl9fbmFtZV9ffSwgZGF0YXNldCBzaXplOiB7bGVuKHRyYWluaW5nX2RhdGFzZXQpfSwgIgo=
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-qwen3-small-indexed-parallel-smoke-v1
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: autoinject-qwen3-small
+    app.kubernetes.io/instance: qwen3-small-indexed-parallel-smoke-v1
+    autoinject-run-kind: indexed-parallel-smoke-v1
+spec:
+  completionMode: Indexed
+  completions: 4
+  parallelism: 3
+  backoffLimitPerIndex: 0
+  maxFailedIndexes: 4
+  activeDeadlineSeconds: 604800
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject-qwen3-small
+        app.kubernetes.io/instance: qwen3-small-indexed-parallel-smoke-v1
+        autoinject-run-kind: indexed-parallel-smoke-v1
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - Tesla-V100-SXM2-32GB
+      initContainers:
+      - name: stage-frozen-source-and-placement-patch
+        image: alpine/git:v2.47.2
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-ec"]
+        args:
+        - |
+          set -euxo pipefail
+          export GIT_TERMINAL_PROMPT=0
+
+          EXPECTED_COMMIT="c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7"
+          EXPECTED_PATCH_SHA256="1a5c6d59c5fde4e36538d6fa2ac3e281b6573373495ecddc8b03b26685a0eb1b"
+          SOURCE_REPOSITORY="https://github.com/czcarrizales/AutoInject"
+          SOURCE_BRANCH="experiments/qwen3-small-baseline-v1"
+          PRIVATE_REPO="/work/AutoInject"
+          PATCH="/runtime/placement.patch"
+          PROVENANCE_STAGING="/work/provenance-staging"
+
+          command -v git
+          command -v timeout
+          test ! -e "${PRIVATE_REPO}"
+          test -s "${PATCH}"
+          sha256sum "${PATCH}" > /work/placement-patch.sha256
+          read -r ACTUAL_PATCH_SHA256 _ < /work/placement-patch.sha256
+          test "${ACTUAL_PATCH_SHA256}" = "${EXPECTED_PATCH_SHA256}"
+          mkdir "${PRIVATE_REPO}"
+          git -C "${PRIVATE_REPO}" init
+          git -C "${PRIVATE_REPO}" remote add origin "${SOURCE_REPOSITORY}"
+          git -C "${PRIVATE_REPO}" config http.lowSpeedLimit 1024
+          git -C "${PRIVATE_REPO}" config http.lowSpeedTime 30
+          timeout 300 git -C "${PRIVATE_REPO}" fetch --no-tags origin \
+            "refs/heads/${SOURCE_BRANCH}"
+          BRANCH_TIP="$(git -C "${PRIVATE_REPO}" rev-parse --verify 'FETCH_HEAD^{commit}')"
+          git -C "${PRIVATE_REPO}" cat-file -e "${EXPECTED_COMMIT}^{commit}"
+          git -C "${PRIVATE_REPO}" merge-base --is-ancestor \
+            "${EXPECTED_COMMIT}" "${BRANCH_TIP}"
+          git -C "${PRIVATE_REPO}" cat-file -e \
+            "${BRANCH_TIP}:baseline/BASELINE_MANIFEST.yaml"
+          git -C "${PRIVATE_REPO}" checkout --detach "${EXPECTED_COMMIT}"
+          test "$(git -C "${PRIVATE_REPO}" rev-parse HEAD)" = "${EXPECTED_COMMIT}"
+          test -z "$(git -C "${PRIVATE_REPO}" status --porcelain)"
+          git -C "${PRIVATE_REPO}" apply --check "${PATCH}"
+          git -C "${PRIVATE_REPO}" apply "${PATCH}"
+          git -C "${PRIVATE_REPO}" diff --check
+          EXPECTED_CHANGED_FILES="$(
+            printf '%s\n' \
+              'agentdojo/src/agentdojo/agent_pipeline/agent_pipeline.py' \
+              'src/rlpi/agentdojo/adaptive_agentdojo.py' \
+              'src/rlpi/agentdojo/config/config.yaml' \
+              'src/rlpi/agentdojo/utils.py' \
+              'src/rlpi/attack/learners/trl_suffix/learner.py'
+          )"
+          ACTUAL_CHANGED_FILES="$(git -C "${PRIVATE_REPO}" diff --name-only)"
+          test "${ACTUAL_CHANGED_FILES}" = "${EXPECTED_CHANGED_FILES}"
+          mkdir "${PROVENANCE_STAGING}"
+          RUNTIME_BRANCH="$(git -C "${PRIVATE_REPO}" branch --show-current)"
+          printf '%s\n' "${RUNTIME_BRANCH:-DETACHED}" \
+            > "${PROVENANCE_STAGING}/runtime-branch.txt"
+          git -C "${PRIVATE_REPO}" rev-parse HEAD \
+            > "${PROVENANCE_STAGING}/runtime-head.txt"
+          git -C "${PRIVATE_REPO}" status --porcelain=v1 \
+            > "${PROVENANCE_STAGING}/runtime-git-status.txt"
+          git -C "${PRIVATE_REPO}" diff --binary \
+            > "${PROVENANCE_STAGING}/runtime-placement.patch"
+          sha256sum "${PROVENANCE_STAGING}/runtime-placement.patch" \
+            > "${PROVENANCE_STAGING}/runtime-placement.patch.sha256"
+          test "$(cut -d' ' -f1 "${PROVENANCE_STAGING}/runtime-placement.patch.sha256")" \
+            = "${EXPECTED_PATCH_SHA256}"
+          printf '%s\n' "${EXPECTED_COMMIT}" \
+            > "${PROVENANCE_STAGING}/source-commit.txt"
+          printf '%s\n' "${SOURCE_BRANCH}" \
+            > "${PROVENANCE_STAGING}/source-branch.txt"
+          printf '%s\n' "${BRANCH_TIP}" \
+            > "${PROVENANCE_STAGING}/baseline-freeze-commit.txt"
+          git -C "${PRIVATE_REPO}" show \
+            "${BRANCH_TIP}:baseline/BASELINE_MANIFEST.yaml" \
+            > "${PROVENANCE_STAGING}/baseline-manifest.yaml"
+          sha256sum "${PROVENANCE_STAGING}/baseline-manifest.yaml" \
+            > "${PROVENANCE_STAGING}/baseline-manifest.sha256"
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        volumeMounts:
+        - name: private-work
+          mountPath: /work
+        - name: runtime
+          mountPath: /runtime
+          readOnly: true
+      containers:
+      - name: autoinject-qwen3-small
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        command: ["bash", "-lc"]
+        args:
+        - |
+          set -Eeuo pipefail
+          PS4='+ line ${LINENO}: '
+
+          on_error() {
+            local exit_code="$1"
+            local failing_line="$2"
+            local failing_command="$3"
+            trap - ERR
+            set +e
+            set +x
+            printf 'ERROR exit_code=%s line=%s command=%q\n' \
+              "${exit_code}" "${failing_line}" "${failing_command}" >&2
+            printf 'ERROR exit_code=%s line=%s command=%q\n' \
+              "${exit_code}" "${failing_line}" "${failing_command}" \
+              > /dev/termination-log
+            exit "${exit_code}"
+          }
+          trap 'on_error "$?" "$LINENO" "$BASH_COMMAND"' ERR
+          set -x
+
+          utc_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+          SMOKE_WRAPPER_START="$(utc_now)"
+          printf 'SMOKE_WRAPPER_START_UTC=%s\n' \
+            "${SMOKE_WRAPPER_START}" >&2
+          printf '%s\n' 'indexed parallel smoke wrapper startup diagnostics active' >&2
+          if [[ -z "${POD_UID:-}" ]]; then
+            printf '%s\n' 'ERROR POD_UID is missing' >&2
+            printf '%s\n' 'ERROR POD_UID is missing' > /dev/termination-log
+            false
+          fi
+
+          case "${JOB_COMPLETION_INDEX:-}" in
+            0) TASK_NAME="smoke-index-00-workspace-u38-i10-attempt-01"; SUITE="workspace"; USER_TASK="user_task_38"; INJECTION_TASK="injection_task_10" ;;
+            1) TASK_NAME="smoke-index-01-banking-u14-i7-attempt-01"; SUITE="banking"; USER_TASK="user_task_14"; INJECTION_TASK="injection_task_7" ;;
+            2) TASK_NAME="smoke-index-02-travel-u18-i3-attempt-01"; SUITE="travel"; USER_TASK="user_task_18"; INJECTION_TASK="injection_task_3" ;;
+            3) TASK_NAME="smoke-index-03-slack-u19-i2-attempt-01"; SUITE="slack"; USER_TASK="user_task_19"; INJECTION_TASK="injection_task_2" ;;
+            *) echo "Invalid JOB_COMPLETION_INDEX '${JOB_COMPLETION_INDEX:-unset}'; expected an integer from 0 through 3." >&2; exit 64 ;;
+          esac
+          readonly TASK_NAME SUITE USER_TASK INJECTION_TASK
+          readonly EXPERIMENT_ID="meta-secalign-qwen3-small-indexed-parallel-smoke-v1-${TASK_NAME}"
+          export TASK_SUITE="${SUITE}" TASK_USER_TASK="${USER_TASK}" TASK_INJECTION_TASK="${INJECTION_TASK}"
+
+          readonly EXPECTED_COMMIT="c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7"
+          readonly EXPECTED_PATCH_SHA256="1a5c6d59c5fde4e36538d6fa2ac3e281b6573373495ecddc8b03b26685a0eb1b"
+          readonly EXPECTED_IMAGE="pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel"
+          readonly PYTHON="/opt/conda/bin/python"
+          readonly PRIVATE_REPO="/work/AutoInject"
+          readonly PROVENANCE_STAGING="/work/provenance-staging"
+          readonly CONSTRAINTS="/runtime/runtime-constraints.txt"
+          readonly BOOTSTRAP_REPORT="/workspace/results/autoinject-qwen3-small/two-v100-bootstrap-v3/environment-report.json"
+          readonly RESULT_ROOT="/workspace/results/autoinject-qwen3-small/indexed-parallel-smoke-v1/${TASK_NAME}"
+          readonly RUN_DIR="${RESULT_ROOT}/run"
+          readonly PROVENANCE_DIR="${RESULT_ROOT}/provenance"
+          readonly JOB_LOG="${RESULT_ROOT}/job.log"
+          GPU_MEMORY_SAMPLER_PID=""
+
+          stop_gpu_memory_sampler() {
+            if [[ -n "${GPU_MEMORY_SAMPLER_PID}" ]]; then
+              kill "${GPU_MEMORY_SAMPLER_PID}" 2>/dev/null || true
+              wait "${GPU_MEMORY_SAMPLER_PID}" 2>/dev/null || true
+            fi
+          }
+          finalize_wrapper() {
+            local exit_code=$?
+            trap - EXIT
+            set +e
+            set +x
+            stop_gpu_memory_sampler
+            printf 'SMOKE_WRAPPER_END_UTC=%s\n' "$(utc_now)"
+            exit "${exit_code}"
+          }
+          trap finalize_wrapper EXIT
+
+          test ! -e "${RESULT_ROOT}"
+          mkdir -p "$(dirname "${RESULT_ROOT}")"
+          mkdir "${RESULT_ROOT}"
+          mkdir "${RUN_DIR}"
+          mkdir "${PROVENANCE_DIR}"
+          mkdir -p /work/home /work/tmp /work/cache/huggingface/modules
+          test -z "$(find "${RUN_DIR}" -mindepth 1 -print -quit)"
+          for forbidden in checkpoint.pt checkpoint_state.json learner_state.json \
+            suffix_state.json trainer_state.json optimizer.pt; do
+            test ! -e "${RUN_DIR}/${forbidden}"
+          done
+          exec > >(tee -a "${JOB_LOG}") 2>&1
+          printf '%s\n' 'persistent job.log logging active'
+          printf 'SMOKE_WRAPPER_START_UTC=%s\n' \
+            "${SMOKE_WRAPPER_START}"
+
+          test -x "${PYTHON}"
+          test -s "${CONSTRAINTS}"
+          test -s "${BOOTSTRAP_REPORT}"
+          test -d "${PROVENANCE_STAGING}"
+          for utility in bash cat cp cut date find mkdir nvidia-smi sha256sum tee timeout; do
+            command -v "${utility}"
+          done
+          cd "${PRIVATE_REPO}"
+          export PYTHONPATH="${PRIVATE_REPO}/src:${PRIVATE_REPO}/agentdojo/src"
+
+          timeout 1800 "${PYTHON}" -m pip install \
+            --constraint "${CONSTRAINTS}" --editable ./agentdojo
+          timeout 1800 "${PYTHON}" -m pip install \
+            --constraint "${CONSTRAINTS}" --editable .
+
+          cp "${PROVENANCE_STAGING}/"* "${PROVENANCE_DIR}/"
+          test "$(cat "${PROVENANCE_DIR}/source-commit.txt")" \
+            = "${EXPECTED_COMMIT}"
+          read -r STAGED_PATCH_SHA256 _ \
+            < "${PROVENANCE_DIR}/runtime-placement.patch.sha256"
+          ACTUAL_PATCH_SHA256="$(
+            sha256sum "${PROVENANCE_DIR}/runtime-placement.patch" | cut -d' ' -f1
+          )"
+          test "${STAGED_PATCH_SHA256}" = "${EXPECTED_PATCH_SHA256}"
+          test "${ACTUAL_PATCH_SHA256}" = "${EXPECTED_PATCH_SHA256}"
+          read -r EXPECTED_MANIFEST_SHA256 _ \
+            < "${PROVENANCE_DIR}/baseline-manifest.sha256"
+          ACTUAL_MANIFEST_SHA256="$(
+            sha256sum "${PROVENANCE_DIR}/baseline-manifest.yaml" | cut -d' ' -f1
+          )"
+          test "${ACTUAL_MANIFEST_SHA256}" = "${EXPECTED_MANIFEST_SHA256}"
+
+          nvidia-smi
+          "${PYTHON}" - "${BOOTSTRAP_REPORT}" "${EXPECTED_COMMIT}" \
+            "${EXPECTED_PATCH_SHA256}" "${EXPECTED_IMAGE}" \
+            "${PROVENANCE_DIR}/environment-report.json" <<'PY'
+          import importlib.metadata
+          import inspect
+          import json
+          import os
+          import platform
+          import sys
+
+          import accelerate
+          import agentdojo
+          import hydra
+          import peft
+          import rlpi
+          import torch
+          import transformers
+          import trl
+          from agentdojo.agent_pipeline.agent_pipeline import LocalLLM
+          from transformers import Trainer, TrainingArguments
+          from rlpi.attack.learners.trl_suffix.learner import TRLSuffixLearner
+          from rlpi.attack.learners.trl_suffix.utils import create_grpo_config
+
+          bootstrap_path, commit, patch_sha, image, output_path = sys.argv[1:]
+          with open(bootstrap_path, encoding="utf-8") as stream:
+              bootstrap = json.load(stream)
+          versions = {
+              "executable": sys.executable,
+              "python": platform.python_version(),
+              "torch": torch.__version__,
+              "torch_cuda": torch.version.cuda,
+              "transformers": transformers.__version__,
+              "accelerate": accelerate.__version__,
+              "trl": trl.__version__,
+              "peft": peft.__version__,
+              "hydra": importlib.metadata.version("hydra-core"),
+          }
+          assert bootstrap["status"] == "success"
+          assert bootstrap["source_commit"] == commit
+          assert bootstrap["patch_sha256"] == "f198205d15b80526903a40c42e9c267d20050a53db0040c633408f5cf822ed5a"
+          assert bootstrap["image"] == image
+          for key, value in versions.items():
+              assert bootstrap[key] == value, (key, bootstrap[key], value)
+          args = TrainingArguments(output_dir="/tmp/runtime-preflight")
+          optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(args)
+          assert optimizer_cls is torch.optim.AdamW
+          assert args.optim.value == "adamw_torch"
+          normalized_optimizer_kwargs = json.loads(
+              json.dumps(optimizer_kwargs, sort_keys=True)
+          )
+          print(json.dumps({
+              "current_optimizer_kwargs": normalized_optimizer_kwargs,
+              "bootstrap_optimizer_kwargs": bootstrap["optimizer_kwargs"],
+          }, indent=2, sort_keys=True))
+          assert bootstrap["fused_explicit"] is False
+          assert bootstrap["foreach_explicit"] is False
+          assert torch.__version__ == "2.5.1+cu124"
+          assert torch.version.cuda == "12.4"
+          assert torch.cuda.is_available() and torch.cuda.device_count() == 2
+          assert [torch.cuda.get_device_name(i) for i in range(2)] == [
+              "Tesla V100-SXM2-32GB", "Tesla V100-SXM2-32GB"
+          ]
+          assert all(torch.cuda.get_device_properties(i).total_memory >= 31 * 1024**3 for i in range(2))
+          assert os.environ["ACCELERATE_TORCH_DEVICE"] == "cuda:1"
+          assert int(os.environ.get("WORLD_SIZE", "1")) == 1
+          assert int(os.environ.get("LOCAL_RANK", "-1")) == -1
+          victim_source = inspect.getsource(LocalLLM.__init__)
+          policy_source = inspect.getsource(TRLSuffixLearner._init_model_and_tokenizer)
+          trainer_source = inspect.getsource(TRLSuffixLearner._create_grpo_trainer_with_reward_function)
+          assert 'device_map={"": device}' in victim_source
+          assert 'device_map={"": self.device}' in policy_source
+          assert 'torch.cuda.set_device(self.device)' in trainer_source
+          config = create_grpo_config(
+              output_dir="/tmp/grpo-preflight",
+              grpo_per_device_train_batch_size=2,
+              grpo_learning_rate=1.0e-5,
+              grpo_num_generations=2,
+              grpo_num_iterations=1,
+              grpo_gradient_accumulation_steps=2,
+              grpo_warmup_steps=4,
+              max_suffix_length=10,
+              max_steps=80,
+              max_grad_norm=0.1,
+              beta=1.0,
+              adam_epsilon=1.0e-5,
+              adam_beta2=0.98,
+          )
+          assert config.max_steps == 80
+          assert config.num_generations == 2 and config.num_iterations == 1
+          assert config.per_device_train_batch_size == 2
+          assert config.gradient_accumulation_steps == 2
+          assert config.generation_batch_size == 4 and config.steps_per_generation == 2
+          assert config.max_completion_length == 10
+          assert "foreach" not in Trainer.get_optimizer_cls_and_kwargs(config)[1]
+          assert "fused" not in Trainer.get_optimizer_cls_and_kwargs(config)[1]
+          report = {
+              "status": "PASS",
+              "source_commit": commit,
+              "placement_patch_sha256": patch_sha,
+              "container_image": image,
+              "pod_name": os.environ.get("POD_NAME"),
+              "node_name": os.environ.get("NODE_NAME"),
+              "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+              "cuda_device_count": torch.cuda.device_count(),
+              "cuda_current_device_before_model_load": torch.cuda.current_device(),
+              "gpu_names": [torch.cuda.get_device_name(i) for i in range(2)],
+              "gpu_total_memory_bytes": [torch.cuda.get_device_properties(i).total_memory for i in range(2)],
+              "optimizer_name": args.optim.value,
+              "optimizer_kwargs": optimizer_kwargs,
+              "models": {"victim": "facebook/Meta-SecAlign-8B", "policy": "Qwen/Qwen2-1.5B", "feedback": "qwen3-small"},
+              "devices": {"victim": "cuda:0", "policy_reference_trainer_optimizer": "cuda:1"},
+              "task": {"suite": os.environ["TASK_SUITE"], "user": os.environ["TASK_USER_TASK"], "injection": os.environ["TASK_INJECTION_TASK"]},
+              "versions": versions,
+          }
+          with open(output_path, "w", encoding="utf-8") as stream:
+              json.dump(report, stream, indent=2, sort_keys=True)
+              stream.write("\n")
+          print(json.dumps(report, indent=2, sort_keys=True))
+          print("smoke_preflight: PASS")
+          PY
+
+          cd "${RUN_DIR}"
+          readonly GPU_MEMORY_LOG="${PROVENANCE_DIR}/gpu-memory.csv"
+          printf '%s\n' \
+            'timestamp,index,name,memory_total_mib,memory_used_mib,memory_free_mib,utilization_gpu_percent' \
+            > "${GPU_MEMORY_LOG}"
+          nvidia-smi \
+            --query-gpu=timestamp,index,name,memory.total,memory.used,memory.free,utilization.gpu \
+            --format=csv,noheader,nounits --loop=5 >> "${GPU_MEMORY_LOG}" &
+          GPU_MEMORY_SAMPLER_PID="$!"
+
+          AUTOINJECT_CMD=(
+            "${PYTHON}" -u -m rlpi.agentdojo.adaptive_agentdojo
+            exp_ident=${EXPERIMENT_ID}
+            model=facebook/Meta-SecAlign-8B
+            victim_device=cuda:0
+            learner=trl_suffix_meta_secalign_repro
+            learner.attack_model_name=Qwen/Qwen2-1.5B
+            learner.device=cuda:1
+            +learner.feedback_model=qwen3-small
+            model_id=null
+            attack=direct
+            defense=null
+            system_message=null
+            force_rerun=false
+            max_tokens=null
+            'modules_to_load=[]'
+            learner.feedback_fallback_model=gpt-4o-mini-2024-07-18
+            learner.max_suffix_length=10
+            learner.temperature=0.9
+            learner.top_p=0.95
+            learner.min_experiences_for_training=1
+            learner.grpo_num_generations=2
+            learner.grpo_num_iterations=1
+            learner.grpo_learning_rate=1.0e-5
+            learner.grpo_per_device_train_batch_size=2
+            learner.grpo_gradient_accumulation_steps=2
+            learner.grpo_warmup_steps=4
+            learner.grpo_max_grad_norm=0.1
+            learner.grpo_beta=1.0
+            learner.grpo_adam_epsilon=1.0e-5
+            learner.grpo_adam_beta2=0.98
+            learner.grpo_eval_num_generalization_tasks=0
+            learner.gpt_enabled=true
+            learner.gpt_sparse_threshold=0.1
+            learner.gpt_medium_threshold=0.3
+            learner.gpt_dense_threshold=0.5
+            learner.gpt_sparse_weight=0.8
+            learner.gpt_medium_weight=0.5
+            learner.gpt_transition_weight=0.3
+            learner.gpt_dense_weight=0.1
+            learner.gpt_max_retries=3
+            learner.gpt_retry_delay=1.0
+            learner.verbose=true
+            suite=${SUITE}
+            "user_tasks=[${USER_TASK}]"
+            "injection_tasks=[${INJECTION_TASK}]"
+            seed=1
+            learner.seed=42
+            query_budget=1
+            "hydra.run.dir=${RUN_DIR}"
+            hydra.job.chdir=false
+          )
+          printf '%s\n' '=== EXACT AUTOINJECT COMMAND ==='
+          printf '%q ' "${AUTOINJECT_CMD[@]}"
+          printf '\n'
+          printf 'AUTOINJECT_COMMAND_START_UTC=%s\n' "$(utc_now)"
+          if "${AUTOINJECT_CMD[@]}"; then
+            AUTOINJECT_EXIT=0
+          else
+            AUTOINJECT_EXIT=$?
+          fi
+          printf 'AUTOINJECT_COMMAND_END_UTC=%s\n' "$(utc_now)"
+          printf 'AUTOINJECT_EXIT_CODE=%s\n' "${AUTOINJECT_EXIT}"
+          if (( AUTOINJECT_EXIT != 0 )); then
+            exit "${AUTOINJECT_EXIT}"
+          fi
+          test -s "${RUN_DIR}/.hydra/config.yaml"
+          test -s "${RUN_DIR}/.hydra/hydra.yaml"
+          test -s "${RUN_DIR}/.hydra/overrides.yaml"
+        env:
+        - name: JOB_COMPLETION_INDEX
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: ACCELERATE_TORCH_DEVICE
+          value: cuda:1
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nrp-llm-token
+              key: NRP_LLM_TOKEN
+        - name: OPENAI_BASE_URL
+          value: https://ellm.nrp-nautilus.io/v1
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        - name: PYTHONNOUSERSITE
+          value: "1"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: TZ
+          value: UTC
+        - name: HOME
+          value: /work/home
+        - name: TMPDIR
+          value: /work/tmp
+        - name: XDG_CACHE_HOME
+          value: /work/cache
+        - name: TORCH_HOME
+          value: /work/cache/torch
+        - name: HF_HOME
+          value: /work/cache/huggingface
+        - name: HF_HUB_CACHE
+          value: /model-cache
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: TRANSFORMERS_OFFLINE
+          value: "1"
+        - name: HF_MODULES_CACHE
+          value: /work/cache/huggingface/modules
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"
+        - name: PIP_CACHE_DIR
+          value: /workspace/pip-cache
+        resources:
+          requests:
+            cpu: "4"
+            memory: 48Gi
+            nvidia.com/gpu: 2
+          limits:
+            cpu: "4"
+            memory: 48Gi
+            nvidia.com/gpu: 2
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+          readOnly: true
+        - name: workspace
+          mountPath: /workspace/results
+          subPath: results
+        - name: workspace
+          mountPath: /workspace/pip-cache
+          subPath: pip-cache
+        - name: workspace
+          mountPath: /model-cache
+          subPath: hf-cache
+          readOnly: true
+        - name: private-work
+          mountPath: /work
+        - name: runtime
+          mountPath: /runtime
+          readOnly: true
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace
+      - name: private-work
+        emptyDir:
+          sizeLimit: 64Gi
+      - name: runtime
+        configMap:
+          name: autoinject-qwen3-small-indexed-parallel-smoke-v1-runtime

@@ -1,0 +1,334 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-qwen3-small-l40-cold-baseline-travel-u18-i3-a02
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: autoinject-qwen3-small
+    app.kubernetes.io/instance: qwen3-small-l40-cold-baseline-travel-u18-i3-a02
+    autoinject-run-kind: l40-cold-baseline-travel-u18-i3-a02
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 43200
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject-qwen3-small
+        app.kubernetes.io/instance: qwen3-small-l40-cold-baseline-travel-u18-i3-a02
+        autoinject-run-kind: l40-cold-baseline-travel-u18-i3-a02
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-L40
+                - NVIDIA-L40S
+      initContainers:
+      - name: stage-frozen-source-and-placement-patch
+        image: alpine/git:v2.47.2
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-ec"]
+        args:
+        - |
+          set -euxo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          EXPECTED_COMMIT="c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7"
+          EXPECTED_PATCH_SHA256="1a5c6d59c5fde4e36538d6fa2ac3e281b6573373495ecddc8b03b26685a0eb1b"
+          SOURCE_REPOSITORY="https://github.com/czcarrizales/AutoInject"
+          SOURCE_BRANCH="experiments/qwen3-small-baseline-v1"
+          PRIVATE_REPO="/work/AutoInject"
+          PATCH="/runtime/placement.patch"
+          PROVENANCE_STAGING="/work/provenance-staging"
+          test ! -e "${PRIVATE_REPO}"
+          test -s "${PATCH}"
+          sha256sum "${PATCH}" > /work/placement-patch.sha256
+          read -r ACTUAL_PATCH_SHA256 _ < /work/placement-patch.sha256
+          test "${ACTUAL_PATCH_SHA256}" = "${EXPECTED_PATCH_SHA256}"
+          mkdir "${PRIVATE_REPO}"
+          git -C "${PRIVATE_REPO}" init
+          git -C "${PRIVATE_REPO}" remote add origin "${SOURCE_REPOSITORY}"
+          git -C "${PRIVATE_REPO}" config http.lowSpeedLimit 1024
+          git -C "${PRIVATE_REPO}" config http.lowSpeedTime 30
+          timeout 300 git -C "${PRIVATE_REPO}" fetch --no-tags origin "refs/heads/${SOURCE_BRANCH}"
+          BRANCH_TIP="$(git -C "${PRIVATE_REPO}" rev-parse --verify 'FETCH_HEAD^{commit}')"
+          git -C "${PRIVATE_REPO}" cat-file -e "${EXPECTED_COMMIT}^{commit}"
+          git -C "${PRIVATE_REPO}" merge-base --is-ancestor "${EXPECTED_COMMIT}" "${BRANCH_TIP}"
+          git -C "${PRIVATE_REPO}" checkout --detach "${EXPECTED_COMMIT}"
+          test "$(git -C "${PRIVATE_REPO}" rev-parse HEAD)" = "${EXPECTED_COMMIT}"
+          test -z "$(git -C "${PRIVATE_REPO}" status --porcelain)"
+          git -C "${PRIVATE_REPO}" apply --check "${PATCH}"
+          git -C "${PRIVATE_REPO}" apply "${PATCH}"
+          git -C "${PRIVATE_REPO}" diff --check
+          mkdir "${PROVENANCE_STAGING}"
+          git -C "${PRIVATE_REPO}" rev-parse HEAD > "${PROVENANCE_STAGING}/source-commit.txt"
+          printf '%s\n' "${SOURCE_BRANCH}" > "${PROVENANCE_STAGING}/source-branch.txt"
+          printf '%s\n' "${BRANCH_TIP}" > "${PROVENANCE_STAGING}/baseline-freeze-commit.txt"
+          git -C "${PRIVATE_REPO}" diff --binary > "${PROVENANCE_STAGING}/runtime-placement.patch"
+          sha256sum "${PROVENANCE_STAGING}/runtime-placement.patch" > "${PROVENANCE_STAGING}/runtime-placement.patch.sha256"
+          git -C "${PRIVATE_REPO}" show "${BRANCH_TIP}:baseline/BASELINE_MANIFEST.yaml" > "${PROVENANCE_STAGING}/baseline-manifest.yaml"
+          sha256sum "${PROVENANCE_STAGING}/baseline-manifest.yaml" > "${PROVENANCE_STAGING}/baseline-manifest.sha256"
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        volumeMounts:
+        - name: private-work
+          mountPath: /work
+        - name: runtime
+          mountPath: /runtime
+          readOnly: true
+      containers:
+      - name: autoinject-qwen3-small
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        command: ["bash", "-lc"]
+        args:
+        - |
+          set -Eeuo pipefail
+          utc_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+          readonly EXPECTED_COMMIT="c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7"
+          readonly EXPECTED_PATCH_SHA256="1a5c6d59c5fde4e36538d6fa2ac3e281b6573373495ecddc8b03b26685a0eb1b"
+          readonly PYTHON="/opt/conda/bin/python"
+          readonly PRIVATE_REPO="/work/AutoInject"
+          readonly AGENTDOJO_PROJECT="${PRIVATE_REPO}/agentdojo"
+          readonly PROVENANCE_STAGING="/work/provenance-staging"
+          readonly CONSTRAINTS="/runtime/runtime-constraints.txt"
+          readonly RESULT_ROOT="/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/travel-u18-i3-attempt-02"
+          readonly RUN_DIR="${RESULT_ROOT}/run"
+          readonly PROVENANCE_DIR="${RESULT_ROOT}/provenance"
+          readonly JOB_LOG="${RESULT_ROOT}/job.log"
+          GPU_MEMORY_SAMPLER_PID=""
+          CGROUP_SAMPLER_PID=""
+          CGROUP_DIR=""
+          CGROUP_VERSION="unknown"
+
+          stop_sampler() {
+            local pid="$1"
+            if [[ -n "${pid}" ]]; then kill "${pid}" 2>/dev/null || true; wait "${pid}" 2>/dev/null || true; fi
+          }
+          summarize_cgroup() {
+            local raw="${PROVENANCE_DIR}/cgroup-resource-samples.tsv"
+            local summary="${PROVENANCE_DIR}/cgroup-resource-summary.txt"
+            [[ -f "${raw}" ]] || return 0
+            awk -F '\t' '
+              NR == 1 { next }
+              $3 ~ /^[0-9]+$/ && $3 > peak { peak=$3 }
+              $8 ~ /^[0-9]+$/ { if (first_usage == "") first_usage=$8; last_usage=$8 }
+              $10 ~ /^[0-9]+$/ { if (first_periods == "") first_periods=$10; last_periods=$10 }
+              $11 ~ /^[0-9]+$/ { if (first_throttled == "") first_throttled=$11; last_throttled=$11 }
+              $12 ~ /^[0-9]+$/ { if (first_throttled_usec == "") first_throttled_usec=$12; last_throttled_usec=$12 }
+              $2 ~ /^[0-9]+$/ { if (first_epoch == "") first_epoch=$2; last_epoch=$2 }
+              END {
+                print "peak_memory_bytes=" (peak == "" ? "unavailable" : peak)
+                if (first_usage != "" && last_usage != "") print "cpu_usage_usec_delta=" last_usage-first_usage; else print "cpu_usage_usec_delta=unavailable"
+                if (first_epoch != "" && last_epoch > first_epoch && first_usage != "" && last_usage != "") print "average_cpu_cores=" (last_usage-first_usage)/1000000/(last_epoch-first_epoch); else print "average_cpu_cores=unavailable"
+                if (first_periods != "" && last_periods != "") print "cpu_nr_periods_delta=" last_periods-first_periods; else print "cpu_nr_periods_delta=unavailable"
+                if (first_throttled != "" && last_throttled != "") print "cpu_nr_throttled_delta=" last_throttled-first_throttled; else print "cpu_nr_throttled_delta=unavailable"
+                if (first_throttled_usec != "" && last_throttled_usec != "") print "cpu_throttled_usec_delta=" last_throttled_usec-first_throttled_usec; else print "cpu_throttled_usec_delta=unavailable"
+              }' "${raw}" > "${summary}" || true
+            if [[ -r "${CGROUP_DIR}/memory.peak" ]]; then printf 'memory_peak_bytes_final=%s\n' "$(cat "${CGROUP_DIR}/memory.peak")" >> "${summary}" || true; fi
+            if [[ -r "${CGROUP_DIR}/memory.events" ]]; then { printf 'memory_events_final='; tr '\n' ';' < "${CGROUP_DIR}/memory.events"; printf '\n'; } >> "${summary}" || true; fi
+            if [[ -r "${CGROUP_DIR}/cpu.stat" ]]; then { printf 'cpu_stat_final='; tr '\n' ';' < "${CGROUP_DIR}/cpu.stat"; printf '\n'; } >> "${summary}" || true; fi
+          }
+          finalize_wrapper() {
+            local status=$?
+            trap - EXIT
+            set +e
+            stop_sampler "${GPU_MEMORY_SAMPLER_PID}"
+            stop_sampler "${CGROUP_SAMPLER_PID}"
+            summarize_cgroup
+            printf '=== CGROUP RESOURCE SUMMARY ===\n'
+            if [[ -s "${PROVENANCE_DIR}/cgroup-resource-summary.txt" ]]; then cat "${PROVENANCE_DIR}/cgroup-resource-summary.txt"; else echo "cgroup summary unavailable"; fi
+            printf 'cgroup_raw_samples=%s\ncgroup_summary=%s\n' "${PROVENANCE_DIR}/cgroup-resource-samples.tsv" "${PROVENANCE_DIR}/cgroup-resource-summary.txt"
+            printf 'FINAL_RESULT_DIRECTORY=%s\n' "${RESULT_ROOT}"
+            printf 'wrapper_exit_code=%s\nwrapper_end_utc=%s\n' "${status}" "$(utc_now)" >> "${PROVENANCE_DIR}/wrapper-status.txt" 2>/dev/null || true
+            exit "${status}"
+          }
+          trap finalize_wrapper EXIT
+
+          test ! -e "${RESULT_ROOT}"
+          mkdir -p "$(dirname "${RESULT_ROOT}")"
+          mkdir "${RESULT_ROOT}" "${RUN_DIR}" "${PROVENANCE_DIR}"
+          mkdir -p /work/home /work/tmp /work/cache/huggingface/modules
+          exec > >(tee -a "${JOB_LOG}") 2>&1
+          printf 'FINAL_RESULT_DIRECTORY=%s\n' "${RESULT_ROOT}"
+          cp "${PROVENANCE_STAGING}/"* "${PROVENANCE_DIR}/"
+          test "$(cat "${PROVENANCE_DIR}/source-commit.txt")" = "${EXPECTED_COMMIT}"
+          test -x "${PYTHON}"; test -s "${CONSTRAINTS}"; test -d "${PRIVATE_REPO}"
+          if [[ ! -d "${AGENTDOJO_PROJECT}" ]]; then
+            echo "ERROR: required AgentDojo project directory is missing: ${AGENTDOJO_PROJECT}" >&2
+            exit 65
+          fi
+          if [[ ! -f "${AGENTDOJO_PROJECT}/pyproject.toml" ]]; then
+            echo "ERROR: AgentDojo packaging metadata is missing: ${AGENTDOJO_PROJECT}/pyproject.toml" >&2
+            exit 65
+          fi
+          if [[ ! -f "${PRIVATE_REPO}/setup.py" ]]; then
+            echo "ERROR: AutoInject packaging metadata is missing: ${PRIVATE_REPO}/setup.py" >&2
+            exit 65
+          fi
+          nvidia-smi
+
+          CGROUP_PATH="$(awk -F: '$1 == "0" { print $3; exit }' /proc/self/cgroup || true)"
+          if [[ -f /sys/fs/cgroup/cgroup.controllers ]]; then
+            CGROUP_VERSION=v2; CGROUP_DIR="/sys/fs/cgroup${CGROUP_PATH}"
+          else
+            CGROUP_VERSION=v1; CGROUP_DIR="/sys/fs/cgroup"
+          fi
+          export CGROUP_VERSION CGROUP_DIR
+          printf 'timestamp_utc\tepoch_seconds\tmemory_current\tmemory_peak\tmemory_max\tmemory_events\tmemory_stat\tcpu_usage_usec\tcpu_user_usec\tcpu_system_usec\tcpu_nr_periods\tcpu_nr_throttled\tcpu_throttled_usec\tcpu_max\n' > "${PROVENANCE_DIR}/cgroup-resource-samples.tsv"
+          (
+            while :; do
+              ts="$(utc_now)"; epoch="$(date +%s)"
+              read_file() { [[ -r "$1" ]] && tr '\n' ';' < "$1" || printf 'unavailable'; }
+              stat_value() { awk -v k="$2" '$1 == k { print $2; found=1 } END { if (!found) print "unavailable" }' "$1" 2>/dev/null; }
+              if [[ "${CGROUP_VERSION}" = v2 ]]; then
+                mem_current="$(read_file "${CGROUP_DIR}/memory.current")"; mem_peak="$(read_file "${CGROUP_DIR}/memory.peak")"; mem_max="$(read_file "${CGROUP_DIR}/memory.max")"
+                mem_events="$(read_file "${CGROUP_DIR}/memory.events")"; mem_stat="$(read_file "${CGROUP_DIR}/memory.stat")"; cpu_stat="${CGROUP_DIR}/cpu.stat"; cpu_max="$(read_file "${CGROUP_DIR}/cpu.max")"
+                usage="$(stat_value "${cpu_stat}" usage_usec)"; user="$(stat_value "${cpu_stat}" user_usec)"; system="$(stat_value "${cpu_stat}" system_usec)"; periods="$(stat_value "${cpu_stat}" nr_periods)"; throttled="$(stat_value "${cpu_stat}" nr_throttled)"; throttled_usec="$(stat_value "${cpu_stat}" throttled_usec)"
+              else
+                mem_current="$(read_file "${CGROUP_DIR}/memory/memory.usage_in_bytes")"; mem_peak="$(read_file "${CGROUP_DIR}/memory/memory.max_usage_in_bytes")"; mem_max="$(read_file "${CGROUP_DIR}/memory/memory.limit_in_bytes")"; mem_events=unavailable; mem_stat="$(read_file "${CGROUP_DIR}/memory/memory.stat")"; cpu_stat="${CGROUP_DIR}/cpuacct/cpuacct.usage"; cpu_max=unavailable
+                usage="$(read_file "${cpu_stat}")"; user=unavailable; system=unavailable; periods=unavailable; throttled=unavailable; throttled_usec=unavailable
+              fi
+              printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${ts}" "${epoch}" "${mem_current}" "${mem_peak}" "${mem_max}" "${mem_events}" "${mem_stat}" "${usage}" "${user}" "${system}" "${periods}" "${throttled}" "${throttled_usec}" "${cpu_max}" >> "${PROVENANCE_DIR}/cgroup-resource-samples.tsv"
+              sleep 1
+            done
+          ) & CGROUP_SAMPLER_PID="$!"
+
+          readonly GPU_MEMORY_LOG="${PROVENANCE_DIR}/gpu-memory.csv"
+          printf '%s\n' 'timestamp,index,name,memory_total_mib,memory_used_mib,memory_free_mib,utilization_gpu_percent' > "${GPU_MEMORY_LOG}"
+          nvidia-smi --query-gpu=timestamp,index,name,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader,nounits --loop=5 >> "${GPU_MEMORY_LOG}" & GPU_MEMORY_SAMPLER_PID="$!"
+          unset PYTORCH_CUDA_ALLOC_CONF
+
+          timeout 1800 "${PYTHON}" -m pip install --constraint "${CONSTRAINTS}" --editable "${AGENTDOJO_PROJECT}"
+          timeout 1800 "${PYTHON}" -m pip install --constraint "${CONSTRAINTS}" --editable "${PRIVATE_REPO}"
+          export PYTHONPATH="${PRIVATE_REPO}/src:${PRIVATE_REPO}/agentdojo/src"
+          "${PYTHON}" - "${PROVENANCE_DIR}/environment-report.json" <<'PY'
+          import json, os, platform, re, subprocess, sys
+          import torch
+          nvidia_smi = subprocess.check_output(["nvidia-smi"], text=True)
+          cuda_match = re.search(r"CUDA Version: ([^ ]+)", nvidia_smi)
+          report = {
+              "source_commit": os.environ.get("EXPECTED_COMMIT", "c4eedbdd9822cfdaaa4ba229d88d31beccf84bb7"),
+              "requested_cpu": "2", "requested_memory": "16Gi", "node_name": os.environ.get("NODE_NAME"),
+              "gpu_name": torch.cuda.get_device_name(0), "gpu_total_memory_bytes": torch.cuda.get_device_properties(0).total_memory,
+              "torch": torch.__version__, "torch_cuda": torch.version.cuda,
+              "nvidia_driver_version": subprocess.check_output(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"], text=True).strip(),
+              "nvidia_smi_cuda_version": cuda_match.group(1) if cuda_match else None,
+              "victim_device": "cuda:0", "policy_reference_trainer_optimizer_device": "cuda:0",
+              "feedback_model": "qwen3-small", "task": ["travel", "user_task_18", "injection_task_3"],
+              "frozen_baseline": {"query_budget": 260, "generations": 8, "iterations": 5, "max_suffix_length": 30, "min_experiences": 1, "temperature": 0.9, "top_p": 0.95, "learning_rate": 1.0e-5, "batch_size": 2, "gradient_accumulation_steps": 2, "warmup_steps": 4, "max_grad_norm": 0.1, "beta": 1.0, "adam_epsilon": 1.0e-5, "adam_beta2": 0.98, "seed": 1, "learner_seed": 42},
+              "job_name": "autoinject-qwen3-small-l40-cold-baseline-travel-u18-i3-a02", "attempt": 2, "cold_start": True, "policy_checkpoint_reuse": False, "suffix_reuse": False,
+              "pytorch_cuda_alloc_conf": os.environ.get("PYTORCH_CUDA_ALLOC_CONF"),
+              "allocator": "default PyTorch allocator; no custom allocator setting enabled",
+              "python": platform.python_version(), "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+          }
+          with open(sys.argv[1], "w", encoding="utf-8") as f: json.dump(report, f, indent=2, sort_keys=True); f.write("\n")
+          PY
+
+          cd "${RUN_DIR}"
+          AUTOINJECT_CMD=(
+            "${PYTHON}" -u -m rlpi.agentdojo.adaptive_agentdojo
+            exp_ident=meta-secalign-qwen3-small-l40-cold-baseline-travel-u18-i3-a02
+            model=facebook/Meta-SecAlign-8B victim_device=cuda:0
+            learner=trl_suffix_meta_secalign_repro learner.attack_model_name=Qwen/Qwen2-1.5B learner.device=cuda:0
+            +learner.feedback_model=qwen3-small model_id=null attack=direct defense=null system_message=null force_rerun=false max_tokens=null 'modules_to_load=[]'
+            learner.feedback_fallback_model=gpt-4o-mini-2024-07-18 learner.max_suffix_length=30 learner.temperature=0.9 learner.top_p=0.95 learner.min_experiences_for_training=1
+            learner.grpo_num_generations=8 learner.grpo_num_iterations=5 learner.grpo_learning_rate=1.0e-5 learner.grpo_per_device_train_batch_size=2 learner.grpo_gradient_accumulation_steps=2 learner.grpo_warmup_steps=4 learner.grpo_max_grad_norm=0.1 learner.grpo_beta=1.0 learner.grpo_adam_epsilon=1.0e-5 learner.grpo_adam_beta2=0.98 learner.grpo_eval_num_generalization_tasks=0
+            learner.gpt_enabled=true learner.gpt_sparse_threshold=0.1 learner.gpt_medium_threshold=0.3 learner.gpt_dense_threshold=0.5 learner.gpt_sparse_weight=0.8 learner.gpt_medium_weight=0.5 learner.gpt_transition_weight=0.3 learner.gpt_dense_weight=0.1 learner.gpt_max_retries=3 learner.gpt_retry_delay=1.0 learner.verbose=true
+            suite=travel 'user_tasks=[user_task_18]' 'injection_tasks=[injection_task_3]' seed=1 learner.seed=42 query_budget=260 "hydra.run.dir=${RUN_DIR}" hydra.job.chdir=false
+          )
+          printf '%q ' "${AUTOINJECT_CMD[@]}"; printf '\n'
+          "${AUTOINJECT_CMD[@]}"
+          test -s "${RUN_DIR}/.hydra/config.yaml"
+        env:
+        - name: POD_UID
+          valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+        - name: NODE_NAME
+          valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+        - name: ACCELERATE_TORCH_DEVICE
+          value: cuda:0
+        - name: OPENAI_API_KEY
+          valueFrom: {secretKeyRef: {name: nrp-llm-token, key: NRP_LLM_TOKEN}}
+        - name: OPENAI_BASE_URL
+          value: https://ellm.nrp-nautilus.io/v1
+        - name: HF_TOKEN
+          valueFrom: {secretKeyRef: {name: hf-token, key: HF_TOKEN}}
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom: {secretKeyRef: {name: hf-token, key: HF_TOKEN}}
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        - name: PYTHONNOUSERSITE
+          value: "1"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: TZ
+          value: UTC
+        - name: HOME
+          value: /work/home
+        - name: TMPDIR
+          value: /work/tmp
+        - name: XDG_CACHE_HOME
+          value: /work/cache
+        - name: TORCH_HOME
+          value: /work/cache/torch
+        - name: HF_HOME
+          value: /work/cache/huggingface
+        - name: HF_HUB_CACHE
+          value: /model-cache
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: TRANSFORMERS_OFFLINE
+          value: "1"
+        - name: HF_MODULES_CACHE
+          value: /work/cache/huggingface/modules
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"
+        - name: PIP_CACHE_DIR
+          value: /workspace/pip-cache
+        resources:
+          requests:
+            cpu: "2"
+            memory: 16Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: "2"
+            memory: 16Gi
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+          readOnly: true
+        - name: workspace
+          mountPath: /workspace/results
+          subPath: results
+        - name: workspace
+          mountPath: /workspace/pip-cache
+          subPath: pip-cache
+        - name: workspace
+          mountPath: /model-cache
+          subPath: hf-cache
+          readOnly: true
+        - name: private-work
+          mountPath: /work
+        - name: runtime
+          mountPath: /runtime
+          readOnly: true
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace
+      - name: private-work
+        emptyDir:
+          sizeLimit: 64Gi
+      - name: runtime
+        configMap:
+          name: autoinject-qwen3-small-indexed-parallel-smoke-v1-runtime

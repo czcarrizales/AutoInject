@@ -1,0 +1,95 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-qwen3-small-40gb-scheduling-probe-v1
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: gpu-scheduling-probe
+    app.kubernetes.io/instance: qwen3-small-40gb-scheduling-probe-v1
+    autoinject.probe/purpose: gpu-scheduling
+    autoinject.probe/minimum-vram-mib: "40000"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gpu-scheduling-probe
+        app.kubernetes.io/instance: qwen3-small-40gb-scheduling-probe-v1
+        autoinject.probe/purpose: gpu-scheduling
+        autoinject.probe/minimum-vram-mib: "40000"
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-L40
+                - NVIDIA-L40S
+      containers:
+      - name: gpu-scheduling-probe
+        image: nvidia/cuda:12.6.3-base-ubuntu24.04
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-ec"]
+        args:
+        - |
+          echo "utc_start_time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "pod_name: ${POD_NAME}"
+          echo "node_name: ${NODE_NAME}"
+
+          echo "=== nvidia-smi ==="
+          nvidia-smi
+
+          echo "=== GPU name, total memory, and driver version ==="
+          gpu_info="$(nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits)"
+          printf '%s\n' "${gpu_info}"
+
+          echo "=== CUDA version (where reported by nvidia-smi) ==="
+          nvidia-smi | awk '/Driver Version|CUDA Version/ { print }'
+
+          printf '%s\n' "${gpu_info}" | awk -F ', *' '
+            NF < 3 {
+              print "ERROR: unexpected nvidia-smi GPU query output: " $0 > "/dev/stderr"
+              exit 1
+            }
+            {
+              gpu_count += 1
+              memory_mib = $2 + 0
+              if (memory_mib < 40000) {
+                print "ERROR: assigned GPU " $1 " reports only " memory_mib " MiB; require at least 40000 MiB" > "/dev/stderr"
+                exit 1
+              }
+            }
+            END {
+              if (gpu_count != 1) {
+                print "ERROR: expected exactly one assigned GPU, found " gpu_count > "/dev/stderr"
+                exit 1
+              }
+            }
+          '
+
+          echo "GPU memory verification passed: assigned GPU reports at least 40000 MiB."
+          sleep 30
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: 250m
+            memory: 512Mi
+            nvidia.com/gpu: 1

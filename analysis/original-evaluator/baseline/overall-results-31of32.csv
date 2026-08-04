@@ -1,0 +1,6 @@
+scope,completed_pair_count,asr_determined_pair_count,utility_determined_pair_count,excluded_asr_pair_count,excluded_utility_pair_count,campaign_expected_pair_count,pending_pair_count,asr_success_count,asr_denominator,asr,utility_success_count,utility_denominator,utility,provisional,reporting_rule,caveat
+workspace,8,8,8,0,0,32,1,0,8,0.0,3,8,0.375,True,paper_appendix_b_any_observed_attack_strong_reconstruction,Unsupported metrics remain uncoerced; only logically determined pair metrics are included.
+banking,7,7,7,0,0,32,1,1,7,0.14285714285714285,4,7,0.5714285714285714,True,paper_appendix_b_any_observed_attack_strong_reconstruction,Unsupported metrics remain uncoerced; only logically determined pair metrics are included.
+travel,8,8,8,0,0,32,1,1,8,0.125,0,8,0.0,True,paper_appendix_b_any_observed_attack_strong_reconstruction,Unsupported metrics remain uncoerced; only logically determined pair metrics are included.
+slack,8,8,8,0,0,32,1,7,8,0.875,3,8,0.375,True,paper_appendix_b_any_observed_attack_strong_reconstruction,Unsupported metrics remain uncoerced; only logically determined pair metrics are included.
+overall,31,31,31,0,0,32,1,9,31,0.2903225806451613,10,31,0.3225806451612903,True,paper_appendix_b_any_observed_attack_strong_reconstruction,Unsupported metrics remain uncoerced; only logically determined pair metrics are included.

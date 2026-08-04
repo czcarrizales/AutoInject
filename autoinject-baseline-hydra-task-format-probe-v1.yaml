@@ -1,0 +1,120 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-baseline-hydra-task-format-probe-v1
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: autoinject-baseline-hydra-task-format-probe
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+      - name: probe
+        image: python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        command: [python3, -c]
+        args:
+        - |
+          import json
+          import re
+          from pathlib import Path
+
+          CONFIGS = (
+              Path("/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i10-attempt-02/run/.hydra/config.yaml"),
+              Path("/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i7-attempt-02/run/.hydra/config.yaml"),
+              Path("/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/travel-u18-i3-attempt-02/run/.hydra/config.yaml"),
+              Path("/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i2-attempt-02/run/.hydra/config.yaml"),
+          )
+          KEY = re.compile(r"^(?P<indent>[ ]*)(?P<key>[^#:\n]+):(?P<value>.*)$")
+          USER_ID = re.compile(r"\buser_task_\d+\b")
+          INJECTION_ID = re.compile(r"\binjection_task_\d+\b")
+
+          def unique(values):
+              return list(dict.fromkeys(values))
+
+          def ids_in(text, pattern):
+              return unique(pattern.findall(text))
+
+          def config_selection_ids(lines, selection_key, pattern):
+              found = []
+              for index, line in enumerate(lines):
+                  match = KEY.match(line)
+                  if not match or match.group("key").strip() != selection_key:
+                      continue
+                  indent = len(match.group("indent"))
+                  found.extend(ids_in(match.group("value"), pattern))
+                  for child in lines[index + 1:]:
+                      if not child.strip() or child.lstrip().startswith("#"):
+                          continue
+                      child_indent = len(child) - len(child.lstrip(" "))
+                      stripped = child.strip()
+                      list_item = stripped.startswith("-")
+                      if child_indent < indent or (child_indent == indent and not list_item):
+                          break
+                      found.extend(ids_in(child, pattern))
+              return unique(found)
+
+          def override_selection_ids(path, selection_key, pattern):
+              if not path.is_file():
+                  return []
+              try:
+                  lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+              except OSError:
+                  return []
+              return unique(identifier for line in lines if selection_key in line for identifier in ids_in(line, pattern))
+
+          def source_name(config_ids, override_ids):
+              if config_ids and override_ids:
+                  return "both"
+              if config_ids:
+                  return "config.yaml"
+              if override_ids:
+                  return "overrides.yaml"
+              return "neither"
+
+          def probe(config_path):
+              overrides_path = config_path.parent / "overrides.yaml"
+              print(f"CONFIG_PATH={config_path}")
+              print(f"CONFIG_EXISTS={config_path.is_file()}")
+              print(f"OVERRIDES_PATH={overrides_path}")
+              print(f"OVERRIDES_EXISTS={overrides_path.is_file()}")
+              if config_path.is_file():
+                  try:
+                      config_lines = config_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                  except OSError:
+                      config_lines = []
+              else:
+                  config_lines = []
+              user_config = config_selection_ids(config_lines, "user_tasks", USER_ID)
+              injection_config = config_selection_ids(config_lines, "injection_tasks", INJECTION_ID)
+              user_overrides = override_selection_ids(overrides_path, "user_tasks", USER_ID)
+              injection_overrides = override_selection_ids(overrides_path, "injection_tasks", INJECTION_ID)
+              print("SAVED_USER_TASK_IDS=" + json.dumps(unique(user_config + user_overrides)))
+              print("SAVED_USER_TASK_SOURCE=" + source_name(user_config, user_overrides))
+              print("SAVED_INJECTION_TASK_IDS=" + json.dumps(unique(injection_config + injection_overrides)))
+              print("SAVED_INJECTION_TASK_SOURCE=" + source_name(injection_config, injection_overrides))
+
+          print("HYDRA_TASK_FORMAT_PROBE_READ_ONLY=true")
+          print(f"CONFIG_COUNT={len(CONFIGS)}")
+          for config in CONFIGS:
+              probe(config)
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+          readOnly: true
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace
+          readOnly: true

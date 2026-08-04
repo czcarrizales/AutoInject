@@ -1,0 +1,289 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-cold-baseline-results-inventory-31of32-v1
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: autoinject-cold-baseline-results-inventory
+    autoinject-run-kind: read-only-results-inventory
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject-cold-baseline-results-inventory
+        autoinject-run-kind: read-only-results-inventory
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+      - name: inventory
+        image: python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        command: [python3, -c]
+        args:
+        - |
+          import json
+          import os
+          import re
+          import shutil
+          import statistics
+          import time
+          from pathlib import Path
+
+          ROOT = Path("/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1")
+          EXPECTED = [
+              ("workspace", 38, 10), ("workspace", 38, 11), ("workspace", 38, 12), ("workspace", 38, 13),
+              ("workspace", 39, 10), ("workspace", 39, 11), ("workspace", 39, 12), ("workspace", 39, 13),
+              ("banking", 14, 5), ("banking", 14, 6), ("banking", 14, 7), ("banking", 14, 8),
+              ("banking", 15, 5), ("banking", 15, 6), ("banking", 15, 7), ("banking", 15, 8),
+              ("travel", 18, 3), ("travel", 18, 4), ("travel", 18, 5), ("travel", 18, 6),
+              ("travel", 19, 3), ("travel", 19, 4), ("travel", 19, 5), ("travel", 19, 6),
+              ("slack", 19, 2), ("slack", 19, 3), ("slack", 19, 4), ("slack", 19, 5),
+              ("slack", 20, 2), ("slack", 20, 3), ("slack", 20, 4), ("slack", 20, 5),
+          ]
+          INDEXED = ROOT / "indexed-remaining-31-attempt-02"
+          RETRIES = ROOT / "retry-failed2-attempt-03"
+          STANDALONE = ROOT / "travel-u18-i3-attempt-02"
+          GIB = 1024 ** 3
+
+          def human(n):
+              units = ("B", "KiB", "MiB", "GiB", "TiB")
+              value = float(n)
+              for unit in units:
+                  if value < 1024 or unit == units[-1]:
+                      return f"{value:.2f} {unit}"
+                  value /= 1024
+
+          def tree_size(path):
+              total = 0
+              for entry in path.rglob("*"):
+                  try:
+                      if entry.is_file() and not entry.is_symlink():
+                          total += entry.stat().st_size
+                  except OSError:
+                      pass
+              return total
+
+          def tree_signature(path):
+              """Read-only snapshot used to reject a directory changing during inventory."""
+              entries = []
+              try:
+                  for entry in path.rglob("*"):
+                      if entry.is_file() and not entry.is_symlink():
+                          stat = entry.stat()
+                          entries.append((str(entry.relative_to(path)), stat.st_size, stat.st_mtime_ns))
+              except OSError:
+                  return None
+              return tuple(entries)
+
+          def read_text(path):
+              try:
+                  return path.read_text(encoding="utf-8", errors="replace")
+              except OSError:
+                  return ""
+
+          def state_values(run):
+              state = run / "checkpoint_state.json"
+              if not state.is_file():
+                  return None, {}, "missing"
+              try:
+                  data = json.loads(read_text(state))
+              except json.JSONDecodeError:
+                  return state, {}, "missing"
+              learner = data.get("learner_state", {})
+              report = data.get("experiment_reporting", {})
+              learner = learner if isinstance(learner, dict) else {}
+              report = report if isinstance(report, dict) else {}
+              early = learner.get("early_stopped", "missing")
+              early = early if isinstance(early, bool) else "missing"
+              accounting = {
+                  "queries_used": learner.get("queries_used"),
+                  "pipeline_runs_attempted": report.get("pipeline_runs_attempted"),
+                  "pipeline_runs_completed": report.get("pipeline_runs_completed"),
+                  "pipeline_run_errors": report.get("pipeline_run_errors"),
+                  "victim_queries_total": report.get("victim_queries_total"),
+                  "budget_overshoot": report.get("budget_overshoot"),
+              }
+              return state, accounting, early
+
+          USER_ID = re.compile(r"\buser_task_\d+\b")
+          INJECTION_ID = re.compile(r"\binjection_task_\d+\b")
+          HYDRA_KEY = re.compile(r"^(?P<indent>[ ]*)(?P<key>[^#:\n]+):(?P<value>.*)$")
+
+          def unique(values):
+              return list(dict.fromkeys(values))
+
+          def config_task_ids(lines, selection_key, pattern):
+              found = []
+              for index, line in enumerate(lines):
+                  match = HYDRA_KEY.match(line)
+                  if not match or match.group("key").strip() != selection_key:
+                      continue
+                  indent = len(match.group("indent"))
+                  found.extend(pattern.findall(match.group("value")))
+                  for child in lines[index + 1:]:
+                      if not child.strip() or child.lstrip().startswith("#"):
+                          continue
+                      child_indent = len(child) - len(child.lstrip(" "))
+                      if child_indent < indent or (child_indent == indent and not child.strip().startswith("-")):
+                          break
+                      found.extend(pattern.findall(child))
+              return unique(found)
+
+          def override_task_ids(path, selection_key, pattern):
+              return unique(identifier for line in read_text(path).splitlines() if selection_key in line for identifier in pattern.findall(line))
+
+          def scalar(lines, name):
+              for line in lines:
+                  match = HYDRA_KEY.match(line)
+                  if match and not match.group("indent") and match.group("key").strip() == name:
+                      return match.group("value").strip().strip("'\\\"")
+              return None
+
+          def source_for(config_ids, override_ids):
+              if config_ids and override_ids:
+                  return "config_and_overrides"
+              if config_ids:
+                  return "config_only"
+              if override_ids:
+                  return "overrides_only"
+              return "missing"
+
+          def hydra_values(run, suite, user, injection, expected_path, actual_path):
+              config_path = run / ".hydra" / "config.yaml"
+              overrides_path = run / ".hydra" / "overrides.yaml"
+              config_lines = read_text(config_path).splitlines()
+              user_config = config_task_ids(config_lines, "user_tasks", USER_ID)
+              injection_config = config_task_ids(config_lines, "injection_tasks", INJECTION_ID)
+              user_overrides = override_task_ids(overrides_path, "user_tasks", USER_ID)
+              injection_overrides = override_task_ids(overrides_path, "injection_tasks", INJECTION_ID)
+              user_agree = not (user_config and user_overrides) or user_config == user_overrides
+              injection_agree = not (injection_config and injection_overrides) or injection_config == injection_overrides
+              saved_user = unique(user_config + user_overrides)
+              saved_injection = unique(injection_config + injection_overrides)
+              user_source = source_for(user_config, user_overrides)
+              injection_source = source_for(injection_config, injection_overrides)
+              task_source = user_source if user_source == injection_source else "mixed"
+              budget = scalar(config_lines, "query_budget")
+              expected_user, expected_injection = f"user_task_{user}", f"injection_task_{injection}"
+              identity_valid = all((len(saved_user) == 1, len(saved_injection) == 1, user_agree, injection_agree, saved_user == [expected_user], saved_injection == [expected_injection], scalar(config_lines, "suite") == suite, budget and budget.isdigit() and int(budget) == 260, actual_path == expected_path))
+              return {"suite": scalar(config_lines, "suite"), "query_budget": int(budget) if budget and budget.isdigit() else None, "saved_user_task_id": saved_user[0] if len(saved_user) == 1 else None, "saved_injection_task_id": saved_injection[0] if len(saved_injection) == 1 else None, "task_id_source": task_source, "task_ids_agree": user_agree and injection_agree, "expected_pair": f"{suite}-u{user}-i{injection}", "task_identity_valid": identity_valid, "config_user_ids": user_config, "config_injection_ids": injection_config, "override_user_ids": user_overrides, "override_injection_ids": injection_overrides}
+
+          def inspect(path, suite, user, injection, attempt, stable, expected_path):
+              run = path / "run"
+              checkpoint = run / "checkpoint.pt"
+              state, accounting, early = state_values(run)
+              hydra = run / ".hydra" / "config.yaml"
+              metadata = hydra_values(run, suite, user, injection, expected_path, path)
+              accounting["query_budget"] = metadata["query_budget"]
+              attempted, errors = accounting.get("pipeline_runs_attempted"), accounting.get("pipeline_run_errors")
+              accounting["pipeline_error_fraction"] = (errors / attempted if isinstance(errors, int) and isinstance(attempted, int) and attempted else None)
+              eval_artifacts = [run / "grpo_training_outputs" / "grpo_evaluations.jsonl", run / "grpo_training_outputs" / "experience_history.jsonl", run / "reward_stats.jsonl"]
+              evaluation_ok = any(p.is_file() and p.stat().st_size > 0 for p in eval_artifacts)
+              base_ok = all((path.is_dir(), checkpoint.is_file() and checkpoint.stat().st_size > 0, state is not None, hydra.is_file() and hydra.stat().st_size > 0, evaluation_ok, stable, metadata["task_identity_valid"]))
+              full_ok = base_ok and all((accounting.get("queries_used") == 260, accounting.get("victim_queries_total") == 260, attempted == 260, isinstance(accounting.get("pipeline_runs_completed"), int), isinstance(errors, int), accounting.get("pipeline_runs_completed") + errors == 260, accounting.get("budget_overshoot") == 0))
+              short_ok = base_ok and early is True and isinstance(attempted, int) and 0 < attempted < 260 and all((accounting.get("queries_used") == attempted, accounting.get("victim_queries_total") == attempted, isinstance(accounting.get("pipeline_runs_completed"), int), isinstance(errors, int), accounting.get("pipeline_runs_completed") + errors == attempted, accounting.get("budget_overshoot") == 0))
+              completion_type = "full_budget" if full_ok else "early_stopped" if short_ok else "invalid_or_incomplete"
+              return {"path": str(path), "suite": suite, "user_task": f"user_task_{user}", "injection_task": f"injection_task_{injection}", "attempt": attempt, "exists": path.is_dir(), "saved_user_task_id": metadata["saved_user_task_id"], "saved_injection_task_id": metadata["saved_injection_task_id"], "task_id_source": metadata["task_id_source"], "task_ids_agree": metadata["task_ids_agree"], "expected_pair": metadata["expected_pair"], "task_identity_valid": metadata["task_identity_valid"], "detected_hydra": metadata, "checkpoint": checkpoint.is_file() and checkpoint.stat().st_size > 0, "checkpoint_bytes": checkpoint.stat().st_size if checkpoint.is_file() else 0, "state": str(state) if state else None, "early_stopped": early, "accounting": accounting, "hydra": hydra.is_file() and hydra.stat().st_size > 0, "evaluation_artifacts": evaluation_ok, "stable_during_5s_observation": stable, "size_bytes": tree_size(path) if path.is_dir() else 0, "completion_type": completion_type, "qualified": full_ok or short_ok}
+
+          print("INVENTORY_READ_ONLY=true")
+          print(f"L40_RESULTS_ROOT={ROOT}")
+          print(f"L40_RESULTS_ROOT_EXISTS={ROOT.is_dir()}")
+          usage = shutil.disk_usage("/workspace")
+          print(json.dumps({"filesystem": "/workspace", "capacity_bytes": usage.total, "used_bytes": usage.used, "available_bytes": usage.free, "capacity_human": human(usage.total), "used_human": human(usage.used), "available_human": human(usage.free)}, sort_keys=True))
+          if not ROOT.is_dir():
+              print("FINAL_CLASSIFICATION=CANNOT_DETERMINE")
+              raise SystemExit(0)
+
+          candidate_paths = [STANDALONE]
+          for suite, user, injection in EXPECTED:
+              name = f"{suite}-u{user}-i{injection}"
+              if (suite, user, injection) not in (("travel", 18, 3),):
+                  candidate_paths.append(INDEXED / f"{name}-attempt-02")
+          candidate_paths.extend((RETRIES / "workspace-u39-i13-attempt-03", RETRIES / "banking-u15-i7-attempt-03"))
+          before = {path: tree_signature(path) for path in candidate_paths if path.is_dir()}
+          time.sleep(5)
+          stable_paths = {path: before.get(path) == tree_signature(path) for path in candidate_paths if path.is_dir()}
+          print("STABILITY_OBSERVATION_SECONDS=5")
+          print("CHANGING_CANDIDATE_DIRECTORIES=" + json.dumps(sorted(str(path) for path, stable in stable_paths.items() if not stable)))
+
+          results = []
+          invalid_pairs = []
+          pending_pairs = []
+          for suite, user, injection in EXPECTED:
+              name = f"{suite}-u{user}-i{injection}"
+              if (suite, user, injection) == ("travel", 18, 3):
+                  candidates = [(STANDALONE, "attempt-02-standalone-full")]
+              elif (suite, user, injection) in (("workspace", 39, 13), ("banking", 15, 7)):
+                  candidates = [(RETRIES / f"{name}-attempt-03", "attempt-03-retry")]
+              else:
+                  candidates = [(INDEXED / f"{name}-attempt-02", "attempt-02-indexed")]
+              inspected = [inspect(path, suite, user, injection, attempt, stable_paths.get(path, False), path) for path, attempt in candidates]
+              qualified = [item for item in inspected if item["qualified"]]
+              if len(qualified) == 1:
+                  status = "complete"
+                  results.append(qualified[0])
+              elif (suite, user, injection) == ("banking", 15, 7):
+                  status = "pending_retry"
+                  pending_pairs.append(name)
+              else:
+                  status = "invalid_or_incomplete"
+                  invalid_pairs.append(name)
+              print("PAIR=" + json.dumps({"pair": name, "status": status, "candidates": inspected}, sort_keys=True))
+
+          pairs = [(r["suite"], r["user_task"], r["injection_task"]) for r in results]
+          duplicates = sorted({pair for pair in pairs if pairs.count(pair) > 1})
+          completed_bytes = sum(r["size_bytes"] for r in results)
+          median_bytes = int(statistics.median([r["size_bytes"] for r in results])) if results else 0
+          accepted_31 = len(results) == 31 and pending_pairs == ["banking-u15-i7"] and not invalid_pairs and not duplicates
+          accepted_32 = len(results) == 32 and not pending_pairs and not invalid_pairs and not duplicates
+          projected_32 = completed_bytes + (median_bytes if accepted_31 else 0)
+          remaining_32 = usage.free - projected_32
+          print("FUTURE_COPY_FOLDER=complete-32-pair-baseline")
+          for result in results:
+              print("SELECTED_RUN=" + json.dumps({
+                  "suite": result["suite"], "user_task": result["user_task"],
+                  "injection_task": result["injection_task"], "source_directory": result["path"],
+                  "attempt": result["attempt"], "size_bytes": result["size_bytes"],
+                  "size_human": human(result["size_bytes"]), "checkpoint_bytes": result["checkpoint_bytes"],
+                  "pipeline_runs_attempted": result["accounting"].get("pipeline_runs_attempted"),
+                  "pipeline_runs_completed": result["accounting"].get("pipeline_runs_completed"),
+                  "pipeline_run_errors": result["accounting"].get("pipeline_run_errors"),
+                  "pipeline_error_fraction": result["accounting"].get("pipeline_error_fraction"),
+                  "queries_used": result["accounting"].get("queries_used"), "victim_queries_total": result["accounting"].get("victim_queries_total"),
+                  "budget_overshoot": result["accounting"].get("budget_overshoot"), "early_stopped": result["early_stopped"],
+                  "completion_type": result["completion_type"],
+              }, sort_keys=True))
+          print("CANONICAL_COMPLETED_COUNT=" + str(len(results)))
+          print("PENDING_PAIRS=" + json.dumps(pending_pairs))
+          print("INVALID_PAIRS=" + json.dumps(invalid_pairs))
+          print("DUPLICATE_CANONICAL_PAIRS=" + json.dumps(duplicates))
+          print("TOTAL_COMPLETED_BYTES=" + str(completed_bytes) + " " + human(completed_bytes))
+          print("MEDIAN_COMPLETED_RUN_BYTES=" + str(median_bytes) + " " + human(median_bytes))
+          print("PROJECTED_32_BYTES=" + str(projected_32) + " " + human(projected_32))
+          print("PROJECTED_REMAINING_BYTES=" + str(remaining_32) + " " + human(remaining_32))
+          if not (accepted_31 or accepted_32):
+              classification = "CANNOT_DETERMINE"
+          elif remaining_32 >= 10 * GIB:
+              classification = "SAFE_TO_COPY_WITHIN_PVC"
+          else:
+              classification = "INSUFFICIENT_SPACE_FOR_FULL_COPY"
+          print("FINAL_CLASSIFICATION=" + classification)
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+          readOnly: true
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace
+          readOnly: true

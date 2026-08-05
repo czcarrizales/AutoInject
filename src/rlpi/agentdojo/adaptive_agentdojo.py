@@ -29,6 +29,29 @@ from rlpi.attack.utils import set_seed
 logger = logging.getLogger(__name__)
 
 
+def validate_continuation_config(cfg: DictConfig) -> None:
+    initialization_mode = cfg.get("initialization_mode", "cold")
+    source_checkpoint_path = cfg.get("source_checkpoint_path")
+    reference_mode = cfg.get("reference_mode", "base")
+
+    if initialization_mode == "cold":
+        if source_checkpoint_path is not None or reference_mode != "base":
+            raise ValueError(
+                "Cold initialization requires source_checkpoint_path=null "
+                "and reference_mode='base'"
+            )
+        return
+    if (
+        initialization_mode != "policy_warm"
+        or source_checkpoint_path is None
+        or reference_mode != "source"
+    ):
+        raise ValueError(
+            "policy_warm initialization requires source_checkpoint_path and "
+            "reference_mode='source'"
+        )
+
+
 def _find_latest_checkpoint(logdir: Path) -> Optional[Path]:
     """Find the checkpoint file in the log directory.
 
@@ -149,8 +172,11 @@ def run_adaptive_attack(
                 f"Please specify a single injection task in your configuration."
             )
 
-    # Check for existing checkpoint to resume from
-    latest_checkpoint = _find_latest_checkpoint(logdir)
+    latest_checkpoint = (
+        _find_latest_checkpoint(logdir)
+        if cfg.get("initialization_mode", "cold") == "cold"
+        else None
+    )
     queries_used = 0
     iteration = 0
     early_stop_triggered = False
@@ -381,6 +407,9 @@ def _setup_pipeline_and_components(
         **learner_params,
     )
 
+    if cfg.get("initialization_mode", "cold") == "policy_warm":
+        learner.load_policy_warm_start(cfg.source_checkpoint_path)
+
     if hasattr(learner, "set_experiment_reporting"):
         learner.set_experiment_reporting(experiment_reporting)
 
@@ -466,6 +495,7 @@ def _run_benchmarks(
 )
 def main(cfg: DictConfig):
     """Main entry point for the adaptive attack experiment."""
+    validate_continuation_config(cfg)
     print("Configuration used:")
     print(cfg)  # Print the loaded config
 

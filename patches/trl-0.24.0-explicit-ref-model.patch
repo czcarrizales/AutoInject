@@ -1,0 +1,28 @@
+--- a/trl/trainer/grpo_trainer.py
++++ b/trl/trainer/grpo_trainer.py
+@@ -225,6 +225,7 @@
+         callbacks: Optional[list[TrainerCallback]] = None,
+         optimizers: tuple[Optional[torch.optim.Optimizer], Optional[torch.optim.lr_scheduler.LambdaLR]] = (None, None),
+         peft_config: Optional["PeftConfig"] = None,
++        ref_model: Optional[PreTrainedModel] = None,
+     ):
+         # Args
+         if args is None:
+@@ -432,10 +433,13 @@
+             # to revert to the initial model.
+             self.ref_model = None
+         else:
+-            # For deepspeed, fsdp or non-distributed models, create a reference model from scratch
+-            config = AutoConfig.from_pretrained(model_id)
+-            architecture = getattr(transformers, config.architectures[0])
+-            self.ref_model = architecture.from_pretrained(model_id, **model_init_kwargs)
++            if ref_model is not None:
++                self.ref_model = ref_model
++            else:
++                # For deepspeed, fsdp or non-distributed models, create a reference model from scratch
++                config = AutoConfig.from_pretrained(model_id)
++                architecture = getattr(transformers, config.architectures[0])
++                self.ref_model = architecture.from_pretrained(model_id, **model_init_kwargs)
+ 
+         # Disable dropout in the models
+         if args.disable_dropout:

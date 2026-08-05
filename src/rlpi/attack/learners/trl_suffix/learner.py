@@ -2,6 +2,8 @@
 TRL-based suffix attack learner using GRPO.
 """
 
+import copy
+import hashlib
 import json
 import logging
 import os
@@ -265,12 +267,14 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
         grpo_config._n_gpu = 1
 
         # Create new trainer with the actual reward function and dataset
+        warm_reference = getattr(self, "_warm_reference", None)
         grpo_trainer = GRPOTrainer(
             model=self.policy,
             reward_funcs=[reward_function],
             train_dataset=training_dataset,
             args=grpo_config,
             processing_class=self.tokenizer,
+            **({"ref_model": warm_reference} if warm_reference is not None else {}),
         )
 
         assert (
@@ -856,6 +860,57 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
         # Log comprehensive statistics after training
         self._log_training_stats()
 
+    def load_policy_warm_start(self, path: str | Path) -> None:
+        """Load only compatible policy weights and create a frozen source reference."""
+        checkpoint_path = Path(path)
+        with checkpoint_path.open("rb") as stream:
+            source_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+        checkpoint = torch.load(
+            checkpoint_path,
+            map_location="cpu",
+            weights_only=True,
+        )
+        if not isinstance(checkpoint, dict):
+            raise ValueError("Policy warm-start checkpoint must be a mapping")
+
+        source_state_dict = checkpoint.get("policy_state_dict")
+        if not isinstance(source_state_dict, dict):
+            raise ValueError("Policy warm-start checkpoint requires policy_state_dict")
+        model_config = checkpoint.get("model_config")
+        if not isinstance(model_config, dict):
+            raise ValueError("Policy warm-start checkpoint requires model_config")
+        if model_config.get("attack_model_name") != self.attack_model_name:
+            raise ValueError(
+                "Policy warm-start attack model mismatch: "
+                f"{model_config.get('attack_model_name')!r} != {self.attack_model_name!r}"
+            )
+
+        if model_config.get("dtype") != str(self.policy.dtype):
+            raise ValueError(
+                "Policy warm-start dtype mismatch: "
+                f"{model_config.get('dtype')!r} != {str(self.policy.dtype)!r}"
+            )
+
+        target_state_dict = self.policy.state_dict()
+        if set(source_state_dict) != set(target_state_dict) or any(
+            not torch.is_tensor(tensor)
+            or tensor.shape != target_state_dict[name].shape
+            or tensor.dtype != target_state_dict[name].dtype
+            for name, tensor in source_state_dict.items()
+        ):
+            raise ValueError("Policy warm-start state dict is incompatible")
+
+        self.policy.load_state_dict(source_state_dict, strict=True)
+        self._warm_reference = copy.deepcopy(self.policy).eval()
+        for parameter in self._warm_reference.parameters():
+            parameter.requires_grad_(False)
+        self.continuation_provenance = {
+            "initialization_mode": "policy_warm",
+            "reference_mode": "source",
+            "source_checkpoint_path": str(checkpoint_path),
+            "source_checkpoint_sha256": source_hash,
+        }
+
     def save_model(
         self,
         path: str,
@@ -917,6 +972,9 @@ class TRLSuffixLearner(AdaptiveAttackLearner):
             },
             "experiment_reporting": experiment_reporting or {},
         }
+        continuation_provenance = getattr(self, "continuation_provenance", None)
+        if continuation_provenance is not None:
+            checkpoint_state["continuation"] = dict(continuation_provenance)
 
         with open(state_path, "w") as f:
             json.dump(checkpoint_state, f, indent=2)

@@ -15,6 +15,9 @@ defense: null
 system_message: null
 force_rerun: false
 seed: 1
+initialization_mode: cold
+source_checkpoint_path: null
+reference_mode: base
 user_tasks: []
 modules_to_load: []
 injection_tasks: []

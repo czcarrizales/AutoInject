@@ -1,10 +1,12 @@
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import hydra
 from omegaconf import DictConfig
+from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from agentdojo.logging import Logger, TraceLogger
@@ -15,6 +17,7 @@ from rlpi.agentdojo.experiment_reporting import (
     ExperimentReporting,
     log_final_experiment_summary,
 )
+from rlpi.agentdojo.continuation_reporting import finalize_stage_record, utc_now
 from rlpi.agentdojo.utils import (
     calculate_average_scores,
     execute_single_benchmark,
@@ -34,6 +37,20 @@ def validate_continuation_config(cfg: DictConfig) -> None:
     source_checkpoint_path = cfg.get("source_checkpoint_path")
     reference_mode = cfg.get("reference_mode", "base")
 
+    record_fields = (
+        "continuation_records_root",
+        "chain_id",
+        "stage",
+        "run_id",
+        "git_commit",
+    )
+    if cfg.get("continuation_records_root") is not None:
+        missing = [field for field in record_fields if cfg.get(field) is None]
+        if missing:
+            raise ValueError("Continuation stage-record metadata is incomplete: " + ", ".join(missing))
+        if int(cfg.get("source_cumulative_queries_used", 0)) < 0:
+            raise ValueError("source_cumulative_queries_used must be non-negative")
+
     if initialization_mode == "cold":
         if source_checkpoint_path is not None or reference_mode != "base":
             raise ValueError(
@@ -50,6 +67,9 @@ def validate_continuation_config(cfg: DictConfig) -> None:
             "policy_warm initialization requires source_checkpoint_path and "
             "reference_mode='source'"
         )
+
+    if cfg.get("continuation_records_root") is not None and cfg.get("source_stage") is None:
+        raise ValueError("policy_warm continuation stage records require source_stage")
 
 
 def _find_latest_checkpoint(logdir: Path) -> Optional[Path]:
@@ -129,6 +149,8 @@ def run_adaptive_attack(
 ):
     """Run adaptive attack learning with a single pipeline instance."""
     query_budget = cfg.query_budget  # New parameter instead of num_iterations
+    stage_started_monotonic = time.monotonic()
+    stage_start_time = utc_now()
     attack = cfg.attack
     defense = cfg.defense
     system_message = cfg.system_message
@@ -365,6 +387,31 @@ def run_adaptive_attack(
     log_final_experiment_summary(
         logger, experiment_reporting, query_budget, queries_used
     )
+    if cfg.get("continuation_records_root") is not None:
+        resolved_config = OmegaConf.to_container(cfg, resolve=True)
+        if not isinstance(resolved_config, dict):
+            raise TypeError("Resolved continuation configuration must be a mapping")
+        record_path = finalize_stage_record(
+            records_root=Path(cfg.continuation_records_root),
+            chain_id=cfg.chain_id,
+            stage=str(cfg.stage),
+            run_id=cfg.run_id,
+            suite=cfg.suite,
+            user_task=user_tasks_to_run[0].ID,
+            injection_task=next(iter(wrapped_tasks_dict)),
+            initialization_mode=cfg.initialization_mode,
+            reference_mode=cfg.reference_mode,
+            source_stage=cfg.get("source_stage"),
+            source_cumulative_queries_used=int(cfg.get("source_cumulative_queries_used", 0)),
+            git_commit=cfg.get("git_commit"),
+            resolved_config=resolved_config,
+            run_dir=logdir,
+            stage_start_time=stage_start_time,
+            stage_end_time=utc_now(),
+            stage_wall_clock_seconds=time.monotonic() - stage_started_monotonic,
+            stdout_log_path=logdir / "stdout.log",
+        )
+        logger.info("Finalized immutable continuation stage record: %s", record_path)
 
 
 def _setup_pipeline_and_components(

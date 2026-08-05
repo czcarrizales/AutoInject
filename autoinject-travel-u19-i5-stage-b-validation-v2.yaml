@@ -1,0 +1,192 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-travel-u19-i5-stage-b-r02
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: autoinject-qwen3-small
+    autoinject-run-kind: travel-u19-i5-stage-b-validation
+spec:
+  completions: 1
+  parallelism: 1
+  backoffLimit: 0
+  activeDeadlineSeconds: 252000
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject-qwen3-small
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values: [NVIDIA-L40, NVIDIA-L40S]
+      initContainers:
+      - name: checkout-code
+        image: alpine/git:v2.47.2
+        command: [/bin/sh, -ec]
+        args:
+        - |
+          set -euxo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          BRANCH=experiment/travel-u19-i5-stage-b-validation
+          COMMIT=abfbad93c88766ba82f4195e43355d5d269a8c8b
+          REPO=/work/AutoInject
+          test ! -e "${REPO}"
+          mkdir -p "${REPO}"
+          git -C "${REPO}" init
+          git -C "${REPO}" remote add origin https://github.com/czcarrizales/AutoInject.git
+          timeout 300 git -C "${REPO}" fetch --no-tags origin "refs/heads/${BRANCH}"
+          git -C "${REPO}" merge-base --is-ancestor "${COMMIT}" FETCH_HEAD
+          git -C "${REPO}" checkout --detach "${COMMIT}"
+          test "$(git -C "${REPO}" rev-parse HEAD)" = "${COMMIT}"
+          test -z "$(git -C "${REPO}" status --porcelain)"
+          printf '%s\n' "${COMMIT}" > /work/validated-code-commit
+        resources:
+          requests: {cpu: 250m, memory: 256Mi}
+          limits: {cpu: 250m, memory: 256Mi}
+        volumeMounts:
+        - {name: work, mountPath: /work}
+      containers:
+      - name: stage-b
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        imagePullPolicy: IfNotPresent
+        command: [bash, -lc]
+        args:
+        - |
+          set -Eeuo pipefail
+          PYTHON=/opt/conda/bin/python
+          REPO=/work/AutoInject
+          CODE_COMMIT=abfbad93c88766ba82f4195e43355d5d269a8c8b
+          SOURCE_CHECKPOINT=/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i5-attempt-02/run/checkpoint.pt
+          SOURCE_STATE=/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i5-attempt-02/run/checkpoint_state.json
+          SOURCE_SHA256=b5fbf2a24ca23aed07b45fd0991b50a81e0abc34a6202760b73888a02af1a746
+          RECORDS_ROOT=/workspace/results/autoinject-qwen3-small/continuations/v1
+          CONSTRAINTS=/runtime/continuation-runtime.txt
+          CHAIN_ID=travel-u19-i5-chain-001
+          RUN_ID=travel-u19-i5-chain-001-stage-b-r02
+          RESULT_ROOT=${RECORDS_ROOT}/chains/${CHAIN_ID}/stage-b/${RUN_ID}
+          RUN_DIR=${RESULT_ROOT}/run
+          STAGE_RECORD=${RECORDS_ROOT}/records/stages/${CHAIN_ID}--stage-B--${RUN_ID}.json
+          test "$(cat /work/validated-code-commit)" = "${CODE_COMMIT}"
+          test -f "${SOURCE_CHECKPOINT}"
+          test -f "${SOURCE_STATE}"
+          test "$(sha256sum "${SOURCE_CHECKPOINT}" | awk '{print $1}')" = "${SOURCE_SHA256}"
+          "${PYTHON}" -c 'import json,sys; assert json.load(open(sys.argv[1]))["learner_state"]["queries_used"] == 260' "${SOURCE_STATE}"
+          test ! -e "${RESULT_ROOT}"
+          test ! -e "${STAGE_RECORD}"
+          mkdir -p /work/home /work/tmp /work/pip-cache
+          test "$(sha256sum "${CONSTRAINTS}" | awk '{print $1}')" = 94c521b60ee9623960c472c2c740ae8eab2cdf49254723b58b308a7c60487345
+          "${PYTHON}" -m pip install --constraint "${CONSTRAINTS}" --editable "${REPO}/agentdojo"
+          "${PYTHON}" -m pip install --constraint "${CONSTRAINTS}" --editable "${REPO}"
+          export PYTHONPATH=${REPO}/src:${REPO}/agentdojo/src
+          "${PYTHON}" - <<'PY'
+          import accelerate, numpy, openai, peft, torch, transformers, trl
+          assert torch.__version__ == "2.5.1+cu124"
+          assert transformers.__version__ == "4.57.0"
+          assert trl.__version__ == "0.24.0"
+          assert accelerate.__version__ == "1.14.0"
+          assert peft.__version__ == "0.20.0"
+          assert numpy.__version__ == "2.1.2"
+          assert openai.__version__ == "2.53.0"
+          PY
+          TRL_FILE="$("${PYTHON}" -c 'import trl.trainer.grpo_trainer as m; print(m.__file__)')"
+          test "$(sha256sum "${TRL_FILE}" | awk '{print $1}')" = bb6905182acf2ec426f1dc9ffc37e5210d58ee47d2764f7cf12dbb90a4a28954
+          "${PYTHON}" - "${TRL_FILE}" <<'PY'
+          import sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          old_signature = '''        peft_config: Optional["PeftConfig"] = None,\n    ):\n'''
+          new_signature = '''        peft_config: Optional["PeftConfig"] = None,\n        ref_model: Optional[PreTrainedModel] = None,\n    ):\n'''
+          old_reference = '''        else:\n            # For deepspeed, fsdp or non-distributed models, create a reference model from scratch\n            config = AutoConfig.from_pretrained(model_id)\n            architecture = getattr(transformers, config.architectures[0])\n            self.ref_model = architecture.from_pretrained(model_id, **model_init_kwargs)\n'''
+          new_reference = '''        else:\n            if ref_model is not None:\n                self.ref_model = ref_model\n            else:\n                # For deepspeed, fsdp or non-distributed models, create a reference model from scratch\n                config = AutoConfig.from_pretrained(model_id)\n                architecture = getattr(transformers, config.architectures[0])\n                self.ref_model = architecture.from_pretrained(model_id, **model_init_kwargs)\n'''
+          assert text.count(old_signature) == 1
+          assert text.count(old_reference) == 1
+          text = text.replace(old_signature, new_signature).replace(old_reference, new_reference)
+          path.write_text(text, encoding="utf-8")
+          PY
+          test "$(sha256sum "${TRL_FILE}" | awk '{print $1}')" = 41aa37447a07da8962b80f599d3f7d75528818b9b25072ce0f39d043f596d725
+          mkdir -p "$(dirname "${RESULT_ROOT}")" "$(dirname "${STAGE_RECORD}")"
+          mkdir "${RESULT_ROOT}" "${RUN_DIR}"
+          cd "${RUN_DIR}"
+          set +e
+          "${PYTHON}" -u -m rlpi.agentdojo.adaptive_agentdojo \
+            exp_ident=meta-secalign-qwen3-small-policy-warm-travel-u19-i5-stage-b-r02 \
+            model=facebook/Meta-SecAlign-8B victim_device=cuda:0 \
+            learner=trl_suffix_meta_secalign_repro \
+            learner.attack_model_name=Qwen/Qwen2-1.5B learner.device=cuda:0 \
+            +learner.feedback_model=qwen3-small \
+            learner.feedback_fallback_model=gpt-4o-mini-2024-07-18 \
+            learner.max_suffix_length=30 learner.temperature=0.9 learner.top_p=0.95 \
+            learner.min_experiences_for_training=1 \
+            learner.grpo_num_generations=8 learner.grpo_num_iterations=5 \
+            learner.grpo_learning_rate=1.0e-5 \
+            learner.grpo_per_device_train_batch_size=2 \
+            learner.grpo_gradient_accumulation_steps=2 learner.grpo_warmup_steps=4 \
+            learner.grpo_max_grad_norm=0.1 learner.grpo_beta=1.0 \
+            learner.grpo_adam_epsilon=1.0e-5 learner.grpo_adam_beta2=0.98 \
+            learner.grpo_eval_num_generalization_tasks=0 \
+            learner.gpt_enabled=true learner.gpt_sparse_threshold=0.1 \
+            learner.gpt_medium_threshold=0.3 learner.gpt_dense_threshold=0.5 \
+            learner.gpt_sparse_weight=0.8 learner.gpt_medium_weight=0.5 \
+            learner.gpt_transition_weight=0.3 learner.gpt_dense_weight=0.1 \
+            learner.gpt_max_retries=3 learner.gpt_retry_delay=1.0 learner.verbose=true \
+            model_id=null attack=direct defense=null system_message=null \
+            force_rerun=false max_tokens=null 'modules_to_load=[]' \
+            suite=travel 'user_tasks=[user_task_19]' 'injection_tasks=[injection_task_5]' \
+            seed=1 learner.seed=42 query_budget=260 \
+            initialization_mode=policy_warm reference_mode=source \
+            source_checkpoint_path="${SOURCE_CHECKPOINT}" \
+            continuation_records_root="${RECORDS_ROOT}" \
+            chain_id="${CHAIN_ID}" stage=B run_id="${RUN_ID}" source_stage=A \
+            source_cumulative_queries_used=260 git_commit="${CODE_COMMIT}" \
+            "hydra.run.dir=${RUN_DIR}" hydra.job.chdir=false \
+            2>&1 | tee /work/stage-b-stdout.log
+          status=${PIPESTATUS[0]}
+          set -e
+          test "${status}" -eq 0
+          test -s "${RUN_DIR}/checkpoint.pt"
+          test -s "${RUN_DIR}/checkpoint_state.json"
+          test -s "${RUN_DIR}/grpo_training_outputs/experience_history.jsonl"
+          test -s "${RUN_DIR}/grpo_training_outputs/grpo_evaluations.jsonl"
+          test -s "${STAGE_RECORD}"
+          cp /work/stage-b-stdout.log "${RUN_DIR}/stdout.log"
+          test -s "${RUN_DIR}/stdout.log"
+        env:
+        - {name: ACCELERATE_TORCH_DEVICE, value: cuda:0}
+        - name: OPENAI_API_KEY
+          valueFrom: {secretKeyRef: {name: nrp-llm-token, key: NRP_LLM_TOKEN}}
+        - {name: OPENAI_BASE_URL, value: https://ellm.nrp-nautilus.io/v1}
+        - name: HF_TOKEN
+          valueFrom: {secretKeyRef: {name: hf-token, key: HF_TOKEN}}
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom: {secretKeyRef: {name: hf-token, key: HF_TOKEN}}
+        - {name: HOME, value: /work/home}
+        - {name: TMPDIR, value: /work/tmp}
+        - {name: HF_HUB_CACHE, value: /model-cache}
+        - {name: HF_HUB_OFFLINE, value: "1"}
+        - {name: TRANSFORMERS_OFFLINE, value: "1"}
+        - {name: PIP_CACHE_DIR, value: /workspace/pip-cache}
+        resources:
+          requests: {cpu: "2", memory: 24Gi, nvidia.com/gpu: 1}
+          limits: {cpu: "2", memory: 24Gi, nvidia.com/gpu: 1}
+        volumeMounts:
+        - {name: workspace, mountPath: /workspace/results, subPath: results}
+        - {name: workspace, mountPath: /workspace/pip-cache, subPath: pip-cache}
+        - {name: workspace, mountPath: /model-cache, subPath: hf-cache, readOnly: true}
+        - {name: work, mountPath: /work}
+        - {name: runtime, mountPath: /runtime, readOnly: true}
+      volumes:
+      - name: workspace
+        persistentVolumeClaim: {claimName: ucr-summer-workspace}
+      - name: work
+        emptyDir: {sizeLimit: 64Gi}
+      - name: runtime
+        configMap: {name: autoinject-continuation-runtime-v1}

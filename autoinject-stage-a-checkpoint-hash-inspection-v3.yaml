@@ -1,0 +1,638 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-stage-a-checkpoint-hash-inspection-v3
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: autoinject-stage-a-checkpoint-hash-inspection
+    autoinject-run-kind: read-only-provenance-inspection
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 14400
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject-stage-a-checkpoint-hash-inspection
+        autoinject-run-kind: read-only-provenance-inspection
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+      - name: inspect
+        image: python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        command: [/bin/bash, -lc]
+        args:
+        - |
+          set -Eeuo pipefail
+          export PYTHONDONTWRITEBYTECODE=1
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import re
+          import stat
+          from pathlib import Path
+
+          SOURCES = [
+            {
+              "suite": "workspace",
+              "user_task": "user_task_38",
+              "injection_task": "injection_task_10",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i10-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i10-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "workspace-u38-i10-chain-001"
+            },
+            {
+              "suite": "workspace",
+              "user_task": "user_task_38",
+              "injection_task": "injection_task_11",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i11-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i11-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "workspace-u38-i11-chain-001"
+            },
+            {
+              "suite": "workspace",
+              "user_task": "user_task_38",
+              "injection_task": "injection_task_12",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i12-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i12-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "workspace-u38-i12-chain-001"
+            },
+            {
+              "suite": "workspace",
+              "user_task": "user_task_38",
+              "injection_task": "injection_task_13",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i13-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i13-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "workspace-u38-i13-chain-001"
+            },
+            {
+              "suite": "workspace",
+              "user_task": "user_task_39",
+              "injection_task": "injection_task_10",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i10-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i10-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "workspace-u39-i10-chain-001"
+            },
+            {
+              "suite": "workspace",
+              "user_task": "user_task_39",
+              "injection_task": "injection_task_11",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i11-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i11-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "workspace-u39-i11-chain-001"
+            },
+            {
+              "suite": "workspace",
+              "user_task": "user_task_39",
+              "injection_task": "injection_task_12",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i12-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i12-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "workspace-u39-i12-chain-001"
+            },
+            {
+              "suite": "workspace",
+              "user_task": "user_task_39",
+              "injection_task": "injection_task_13",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/retry-failed2-attempt-03/workspace-u39-i13-attempt-03/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/retry-failed2-attempt-03/workspace-u39-i13-attempt-03/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "workspace-u39-i13-chain-001"
+            },
+            {
+              "suite": "banking",
+              "user_task": "user_task_14",
+              "injection_task": "injection_task_5",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i5-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i5-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "banking-u14-i5-chain-001"
+            },
+            {
+              "suite": "banking",
+              "user_task": "user_task_14",
+              "injection_task": "injection_task_6",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i6-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i6-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "banking-u14-i6-chain-001"
+            },
+            {
+              "suite": "banking",
+              "user_task": "user_task_14",
+              "injection_task": "injection_task_7",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i7-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i7-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 65,
+              "chain_id": "banking-u14-i7-chain-001"
+            },
+            {
+              "suite": "banking",
+              "user_task": "user_task_14",
+              "injection_task": "injection_task_8",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i8-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i8-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "banking-u14-i8-chain-001"
+            },
+            {
+              "suite": "banking",
+              "user_task": "user_task_15",
+              "injection_task": "injection_task_5",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i5-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i5-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "banking-u15-i5-chain-001"
+            },
+            {
+              "suite": "banking",
+              "user_task": "user_task_15",
+              "injection_task": "injection_task_6",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i6-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i6-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "banking-u15-i6-chain-001"
+            },
+            {
+              "suite": "banking",
+              "user_task": "user_task_15",
+              "injection_task": "injection_task_7",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/retry-failed2-attempt-03/banking-u15-i7-attempt-03/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/retry-failed2-attempt-03/banking-u15-i7-attempt-03/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "banking-u15-i7-chain-001"
+            },
+            {
+              "suite": "banking",
+              "user_task": "user_task_15",
+              "injection_task": "injection_task_8",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i8-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i8-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "banking-u15-i8-chain-001"
+            },
+            {
+              "suite": "travel",
+              "user_task": "user_task_18",
+              "injection_task": "injection_task_3",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/travel-u18-i3-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/travel-u18-i3-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "travel-u18-i3-chain-001"
+            },
+            {
+              "suite": "travel",
+              "user_task": "user_task_18",
+              "injection_task": "injection_task_4",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i4-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i4-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "travel-u18-i4-chain-001"
+            },
+            {
+              "suite": "travel",
+              "user_task": "user_task_18",
+              "injection_task": "injection_task_5",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i5-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i5-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "travel-u18-i5-chain-001"
+            },
+            {
+              "suite": "travel",
+              "user_task": "user_task_18",
+              "injection_task": "injection_task_6",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i6-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i6-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "travel-u18-i6-chain-001"
+            },
+            {
+              "suite": "travel",
+              "user_task": "user_task_19",
+              "injection_task": "injection_task_3",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i3-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i3-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "travel-u19-i3-chain-001"
+            },
+            {
+              "suite": "travel",
+              "user_task": "user_task_19",
+              "injection_task": "injection_task_4",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i4-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i4-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "travel-u19-i4-chain-001"
+            },
+            {
+              "suite": "travel",
+              "user_task": "user_task_19",
+              "injection_task": "injection_task_5",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i5-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i5-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "travel-u19-i5-chain-001",
+              "known_checkpoint_sha256": "b5fbf2a24ca23aed07b45fd0991b50a81e0abc34a6202760b73888a02af1a746"
+            },
+            {
+              "suite": "travel",
+              "user_task": "user_task_19",
+              "injection_task": "injection_task_6",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i6-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i6-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "travel-u19-i6-chain-001"
+            },
+            {
+              "suite": "slack",
+              "user_task": "user_task_19",
+              "injection_task": "injection_task_2",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i2-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i2-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "slack-u19-i2-chain-001"
+            },
+            {
+              "suite": "slack",
+              "user_task": "user_task_19",
+              "injection_task": "injection_task_3",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i3-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i3-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "slack-u19-i3-chain-001"
+            },
+            {
+              "suite": "slack",
+              "user_task": "user_task_19",
+              "injection_task": "injection_task_4",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i4-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i4-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "slack-u19-i4-chain-001"
+            },
+            {
+              "suite": "slack",
+              "user_task": "user_task_19",
+              "injection_task": "injection_task_5",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i5-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i5-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "slack-u19-i5-chain-001"
+            },
+            {
+              "suite": "slack",
+              "user_task": "user_task_20",
+              "injection_task": "injection_task_2",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i2-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i2-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 65,
+              "chain_id": "slack-u20-i2-chain-001"
+            },
+            {
+              "suite": "slack",
+              "user_task": "user_task_20",
+              "injection_task": "injection_task_3",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i3-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i3-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 65,
+              "chain_id": "slack-u20-i3-chain-001"
+            },
+            {
+              "suite": "slack",
+              "user_task": "user_task_20",
+              "injection_task": "injection_task_4",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i4-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i4-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "slack-u20-i4-chain-001"
+            },
+            {
+              "suite": "slack",
+              "user_task": "user_task_20",
+              "injection_task": "injection_task_5",
+              "checkpoint_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i5-attempt-02/run/checkpoint.pt",
+              "checkpoint_state_path": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i5-attempt-02/run/checkpoint_state.json",
+              "expected_queries_used": 260,
+              "chain_id": "slack-u20-i5-chain-001"
+            }
+          ]
+          EXPECTED_PAIRS = {
+              *(("workspace", f"user_task_{user}", f"injection_task_{injection}")
+                for user in (38, 39) for injection in range(10, 14)),
+              *(("banking", f"user_task_{user}", f"injection_task_{injection}")
+                for user in (14, 15) for injection in range(5, 9)),
+              *(("travel", f"user_task_{user}", f"injection_task_{injection}")
+                for user in (18, 19) for injection in range(3, 7)),
+              *(("slack", f"user_task_{user}", f"injection_task_{injection}")
+                for user in (19, 20) for injection in range(2, 6)),
+          }
+
+
+          def fail(message):
+              raise RuntimeError(message)
+
+
+          def regular_nonempty(path, label):
+              try:
+                  metadata = path.lstat()
+              except FileNotFoundError:
+                  fail(f"{label} is missing: {path}")
+              if not stat.S_ISREG(metadata.st_mode) or metadata.st_size <= 0:
+                  fail(f"{label} must be a regular nonempty file: {path}")
+              return metadata
+
+
+          def load_json(path, label):
+              regular_nonempty(path, label)
+              def reject_nonfinite(value):
+                  fail(f"{label} contains non-finite JSON value {value}: {path}")
+              try:
+                  with path.open(encoding="utf-8") as handle:
+                      value = json.load(handle, parse_constant=reject_nonfinite)
+              except (OSError, json.JSONDecodeError) as error:
+                  fail(f"{label} is not valid JSON: {path}: {error}")
+              if not isinstance(value, dict):
+                  fail(f"{label} must contain a JSON object: {path}")
+              return value
+
+
+          def hash_file(path):
+              digest = hashlib.sha256()
+              with path.open("rb") as handle:
+                  for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+
+          CANONICAL_SUITES = frozenset(("workspace", "banking", "travel", "slack"))
+          HYDRA_SUITE_LINE = re.compile(
+              r"(?m)^suite:[ \t]*(?P<value>[^#\r\n]*?)[ \t]*(?:#.*)?$"
+          )
+          HYDRA_PLAIN_SCALAR = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
+          HYDRA_INTEGER_SCALAR = re.compile(r"[+-]?[0-9]+")
+          HYDRA_FLOAT_SCALAR = re.compile(
+              r"[+-]?(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
+          )
+
+
+          def classify_hydra_suite_scalar(raw_text):
+              value = raw_text.strip()
+              if value == "" or value in {"null", "Null", "NULL", "~"}:
+                  return None, "NoneType"
+              if len(value) >= 2 and value[0] == value[-1] == "'":
+                  return value[1:-1].replace("''", "'"), "str"
+              if len(value) >= 2 and value[0] == value[-1] == '"':
+                  try:
+                      decoded = json.loads(value)
+                  except json.JSONDecodeError:
+                      return value, "unsupported"
+                  return decoded, type(decoded).__name__
+              if value in {"true", "True", "TRUE", "false", "False", "FALSE"}:
+                  return value.lower() == "true", "bool"
+              if HYDRA_INTEGER_SCALAR.fullmatch(value):
+                  return int(value), "int"
+              if HYDRA_FLOAT_SCALAR.fullmatch(value):
+                  return float(value), "float"
+              if value.startswith("[") or value.endswith("]"):
+                  return value, "list"
+              if value.startswith("{") or value.endswith("}"):
+                  return value, "dict"
+              if HYDRA_PLAIN_SCALAR.fullmatch(value):
+                  return value, "str"
+              return value, "unsupported"
+
+
+          def normalize_hydra_suite(raw_value, raw_value_type):
+              if raw_value_type == "str" and raw_value in CANONICAL_SUITES:
+                  return raw_value
+              return None
+
+
+          def fail_hydra_suite(reason, expected, raw_value, normalized, raw_type, path):
+              fail(
+                  f"Hydra suite validation failed ({reason}): "
+                  f"expected_suite={expected!r}; raw_suite_value={raw_value!r}; "
+                  f"normalized_suite={normalized!r}; raw_value_type={raw_type}; "
+                  f"config_path={path}"
+              )
+
+
+          def parse_hydra_suite(text, expected, config_path):
+              matches = list(HYDRA_SUITE_LINE.finditer(text))
+              if len(matches) == 0:
+                  fail_hydra_suite(
+                      "missing top-level suite", expected, None, None, "NoneType", config_path
+                  )
+              if len(matches) != 1:
+                  raw_values = [match.group("value").strip() for match in matches]
+                  fail_hydra_suite(
+                      "duplicate top-level suite keys",
+                      expected,
+                      raw_values,
+                      None,
+                      "list",
+                      config_path,
+                  )
+
+              raw_value, raw_type = classify_hydra_suite_scalar(
+                  matches[0].group("value")
+              )
+              normalized = normalize_hydra_suite(raw_value, raw_type)
+              if normalized is None:
+                  fail_hydra_suite(
+                      "unknown or unsupported suite representation",
+                      expected,
+                      raw_value,
+                      normalized,
+                      raw_type,
+                      config_path,
+                  )
+              if normalized != expected:
+                  fail_hydra_suite(
+                      "suite mismatch",
+                      expected,
+                      raw_value,
+                      normalized,
+                      raw_type,
+                      config_path,
+                  )
+              return normalized
+
+
+          def validate_hydra_identity(config_path, source):
+              regular_nonempty(config_path, "Hydra config")
+              text = config_path.read_text(encoding="utf-8")
+              parse_hydra_suite(text, source["suite"], config_path)
+              users = set(re.findall(r"\buser_task_\d+\b", text))
+              injections = set(re.findall(r"\binjection_task_\d+\b", text))
+              if users != {source["user_task"]}:
+                  fail(f"Hydra user-task identity mismatch: {config_path}: {sorted(users)}")
+              if injections != {source["injection_task"]}:
+                  fail(
+                      f"Hydra injection-task identity mismatch: "
+                      f"{config_path}: {sorted(injections)}"
+                  )
+
+
+          if len(SOURCES) != 32:
+              fail(f"Expected exactly 32 selected sources, found {len(SOURCES)}")
+
+          pairs = [
+              (source["suite"], source["user_task"], source["injection_task"])
+              for source in SOURCES
+          ]
+          if len(set(pairs)) != len(pairs):
+              fail("Selected source list contains duplicate task pairs")
+          if set(pairs) != EXPECTED_PAIRS:
+              fail(
+                  f"Selected source pairs differ from the established 32: "
+                  f"missing={sorted(EXPECTED_PAIRS - set(pairs))}, "
+                  f"extra={sorted(set(pairs) - EXPECTED_PAIRS)}"
+              )
+
+          for field in ("checkpoint_path", "checkpoint_state_path", "chain_id"):
+              values = [source[field] for source in SOURCES]
+              if len(set(values)) != len(values):
+                  fail(f"Selected source list contains duplicate {field} values")
+
+          records = []
+          for source in SOURCES:
+              checkpoint = Path(source["checkpoint_path"])
+              state_path = Path(source["checkpoint_state_path"])
+              if not checkpoint.is_absolute() or not state_path.is_absolute():
+                  fail(f"Selected source paths must be absolute: {checkpoint}, {state_path}")
+              if checkpoint.name != "checkpoint.pt":
+                  fail(f"Unexpected checkpoint filename: {checkpoint}")
+              if state_path.name != "checkpoint_state.json":
+                  fail(f"Unexpected checkpoint-state filename: {state_path}")
+              if checkpoint.parent != state_path.parent:
+                  fail(f"Checkpoint and state directories differ: {checkpoint}, {state_path}")
+
+              checkpoint_metadata = regular_nonempty(checkpoint, "checkpoint")
+              state_metadata = regular_nonempty(state_path, "checkpoint state")
+              state = load_json(state_path, "checkpoint state")
+
+              learner_state = state.get("learner_state")
+              if not isinstance(learner_state, dict) or "queries_used" not in learner_state:
+                  fail(f"learner_state.queries_used is absent: {state_path}")
+              queries_used = learner_state["queries_used"]
+              if isinstance(queries_used, bool) or not isinstance(queries_used, int):
+                  fail(f"learner_state.queries_used must be an integer: {state_path}")
+              if queries_used != source["expected_queries_used"]:
+                  fail(
+                      f"queries_used disagrees with finalized baseline report for "
+                      f"{checkpoint}: {queries_used} != {source['expected_queries_used']}"
+                  )
+
+              model_info = state.get("model_info")
+              if not isinstance(model_info, dict):
+                  fail(f"model_info is absent from checkpoint state: {state_path}")
+              recorded_checkpoint = model_info.get("checkpoint_path")
+              if recorded_checkpoint != str(checkpoint):
+                  fail(
+                      f"checkpoint state path mismatch: "
+                      f"{recorded_checkpoint!r} != {str(checkpoint)!r}"
+                  )
+
+              result_directory = checkpoint.parent.parent
+              identity_validated = False
+              provenance_path = result_directory / "provenance" / "provenance.json"
+              if provenance_path.exists():
+                  provenance = load_json(provenance_path, "provenance")
+                  actual_identity = (
+                      provenance.get("suite"),
+                      provenance.get("user_task"),
+                      provenance.get("injection_task"),
+                  )
+                  expected_identity = (
+                      source["suite"],
+                      source["user_task"],
+                      source["injection_task"],
+                  )
+                  if actual_identity != expected_identity:
+                      fail(
+                          f"Provenance task identity mismatch: "
+                          f"{provenance_path}: {actual_identity} != {expected_identity}"
+                      )
+                  if provenance.get("result_directory") != str(result_directory):
+                      fail(
+                          f"Provenance selected-result path mismatch: {provenance_path}"
+                      )
+                  identity_validated = True
+
+              hydra_path = checkpoint.parent / ".hydra" / "config.yaml"
+              if hydra_path.exists():
+                  validate_hydra_identity(hydra_path, source)
+                  identity_validated = True
+              if not identity_validated:
+                  fail(
+                      f"No retained provenance or Hydra identity evidence for "
+                      f"{source['suite']}/{source['user_task']}/{source['injection_task']}"
+                  )
+
+              checkpoint_sha256 = hash_file(checkpoint)
+              known_hash = source.get("known_checkpoint_sha256")
+              if known_hash is not None and checkpoint_sha256 != known_hash:
+                  fail(
+                      f"Checkpoint hash disagrees with retained inspection evidence: "
+                      f"{checkpoint_sha256} != {known_hash}"
+                  )
+
+              records.append(
+                  {
+                      "chain_id": source["chain_id"],
+                      "checkpoint_path": str(checkpoint),
+                      "checkpoint_sha256": checkpoint_sha256,
+                      "checkpoint_size_bytes": checkpoint_metadata.st_size,
+                      "checkpoint_state_path": str(state_path),
+                      "checkpoint_state_sha256": hash_file(state_path),
+                      "checkpoint_state_size_bytes": state_metadata.st_size,
+                      "injection_task": source["injection_task"],
+                      "queries_used": queries_used,
+                      "suite": source["suite"],
+                      "user_task": source["user_task"],
+                  }
+              )
+
+          if len(records) != 32:
+              fail(f"Expected exactly 32 output records, found {len(records)}")
+          for record in records:
+              print(json.dumps(record, sort_keys=True, separators=(",", ":")))
+
+          PY
+        env:
+        - {name: HOME, value: /tmp}
+        - {name: TMPDIR, value: /tmp}
+        resources:
+          requests: {cpu: 500m, memory: 512Mi}
+          limits: {cpu: 500m, memory: 512Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace/results
+          subPath: results
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace
+          readOnly: true
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
+

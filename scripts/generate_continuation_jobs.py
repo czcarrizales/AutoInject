@@ -28,7 +28,7 @@ RUNTIME_CONFIG_MAP = "autoinject-continuation-runtime-v1"
 # This is deliberately unset until a committed hardened runtime revision is
 # available. CODE_COMMIT and RUNTIME_HARDENING_COMMIT are derived aliases so
 # every rendered location has one generator-supplied source of truth.
-INTENDED_RUNTIME_COMMIT: str | None = None
+INTENDED_RUNTIME_COMMIT: str | None = "66f4e040e891926bd493b5466d501d11b3f7fa96"
 CODE_COMMIT = INTENDED_RUNTIME_COMMIT
 RUNTIME_HARDENING_COMMIT = INTENDED_RUNTIME_COMMIT
 TEMPLATE_RUNTIME_COMMIT = "abfbad93c88766ba82f4195e43355d5d269a8c8b"

@@ -17,8 +17,17 @@ force_rerun: false
 seed: 1
 initialization_mode: cold
 source_checkpoint_path: null
+source_checkpoint_sha256: null
+source_checkpoint_size_bytes: null
+source_checkpoint_state_path: null
+source_checkpoint_state_sha256: null
+source_checkpoint_state_size_bytes: null
+source_stage_queries_used: null
 reference_mode: base
 continuation_records_root: null
+result_root: null
+stage_record_path: null
+configuration_fingerprint: null
 chain_id: null
 stage: null
 run_id: null

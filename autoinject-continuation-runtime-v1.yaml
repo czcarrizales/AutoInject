@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoinject-continuation-runtime-v1
+  namespace: ucr-rai-chazz
+immutable: true
+data:
+  continuation-runtime.txt: |
+    torch==2.5.1
+    transformers==4.57.0
+    trl==0.24.0
+    accelerate==1.14.0
+    peft==0.20.0
+    numpy==2.1.2
+    openai==2.53.0

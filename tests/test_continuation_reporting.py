@@ -4,12 +4,16 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from rlpi.agentdojo.continuation_reporting import (
+    PUBLICATION_REQUEST_SCHEMA,
     canonical_json_bytes,
     finalize_stage_record,
+    publish_stage_record,
     sha256_file,
     validate_record_component,
+    write_stage_publication_request,
 )
 
 try:
@@ -48,7 +52,14 @@ class ContinuationReportingTests(unittest.TestCase):
                 "victim_queries_total": 5, "pipeline_runs_attempted": 5,
                 "pipeline_runs_completed": 4, "pipeline_run_errors": 1, "budget_overshoot": 0,
             },
-            "continuation": {"source_checkpoint_path": "/stage-a/checkpoint.pt", "source_checkpoint_sha256": "a" * 64},
+            "continuation": {
+                "source_checkpoint_path": "/stage-a/checkpoint.pt",
+                "source_checkpoint_sha256": "a" * 64,
+                "source_checkpoint_state_path": "/stage-a/checkpoint_state.json",
+                "source_checkpoint_state_sha256": "b" * 64,
+                "source_checkpoint_size_bytes": 123,
+                "source_checkpoint_state_size_bytes": 456,
+            },
         }), encoding="utf-8")
 
     def finalize(self, *, stage="B", run_id="run-b", source_total=5, source_stage="A"):
@@ -57,10 +68,19 @@ class ContinuationReportingTests(unittest.TestCase):
             stage=stage, run_id=run_id, suite="travel", user_task="user_task_19",
             injection_task="injection_task_5", initialization_mode="policy_warm",
             reference_mode="source", source_stage=source_stage, source_cumulative_queries_used=source_total,
-            git_commit="abc123", resolved_config={"query_budget": 5, "nested": {"b": 2, "a": 1}},
+            git_commit="abc123", resolved_config={
+                "query_budget": 5, "nested": {"b": 2, "a": 1},
+                "source_checkpoint_path": "/stage-a/checkpoint.pt",
+                "source_checkpoint_sha256": "a" * 64,
+                "source_checkpoint_state_path": "/stage-a/checkpoint_state.json",
+                "source_checkpoint_state_sha256": "b" * 64,
+                "source_checkpoint_size_bytes": 123,
+                "source_checkpoint_state_size_bytes": 456,
+            },
             run_dir=self.run, stage_start_time="2026-08-04T00:00:00Z",
             stage_end_time="2026-08-04T00:00:02Z", stage_wall_clock_seconds=2.0,
             gpu_name="Test GPU", gpu_count=1,
+            configuration_fingerprint="c" * 64,
         )
 
     def test_canonical_hashing_and_atomic_finalization(self):
@@ -84,6 +104,123 @@ class ContinuationReportingTests(unittest.TestCase):
         (self.run / "grpo_training_outputs/grpo_evaluations.jsonl").unlink()
         with self.assertRaises(FileNotFoundError):
             self.finalize(run_id="missing")
+
+    def test_shell_publisher_requires_all_postconditions_and_is_no_replace(self):
+        stdout = self.run / "stdout.log"
+        stdout.write_text("finalized log\n", encoding="utf-8")
+        records_root = self.root / "continuations/v1"
+        record_path = records_root / "records/stages/travel-u19-i5-chain-1--stage-B--run-b.json"
+        request = {
+            "schema_version": PUBLICATION_REQUEST_SCHEMA,
+            "records_root": str(records_root),
+            "chain_id": "travel-u19-i5-chain-1",
+            "stage": "B",
+            "run_id": "run-b",
+            "suite": "travel",
+            "user_task": "user_task_19",
+            "injection_task": "injection_task_5",
+            "initialization_mode": "policy_warm",
+            "reference_mode": "source",
+            "source_stage": "A",
+            "source_cumulative_queries_used": 5,
+            "git_commit": "abc123",
+            "resolved_config": {
+                "query_budget": 5, "source_checkpoint_path": "/stage-a/checkpoint.pt",
+                "source_checkpoint_sha256": "a" * 64,
+                "source_checkpoint_state_path": "/stage-a/checkpoint_state.json",
+                "source_checkpoint_state_sha256": "b" * 64,
+                "source_checkpoint_size_bytes": 123,
+                "source_checkpoint_state_size_bytes": 456,
+            },
+            "run_dir": str(self.run),
+            "result_root": str(self.run.parent),
+            "stage_record_path": str(record_path),
+            "configuration_fingerprint": "c" * 64,
+            "stage_start_time": "2026-08-04T00:00:00Z",
+            "stage_end_time": "2026-08-04T00:00:02Z",
+            "stage_wall_clock_seconds": 2.0,
+        }
+        request_path = self.run / "stage-publication-request.json"
+        write_stage_publication_request(request_path, request)
+        published = publish_stage_record(request_path, stdout)
+        self.assertEqual(published, record_path)
+        record = json.loads(published.read_text())
+        self.assertEqual(record["stdout_log_sha256"], sha256_file(stdout))
+        with self.assertRaises(FileExistsError):
+            publish_stage_record(request_path, stdout)
+
+    def test_publisher_does_not_publish_after_postcondition_failure(self):
+        stdout = self.run / "stdout.log"
+        stdout.write_text("finalized log\n", encoding="utf-8")
+        (self.run / "grpo_training_outputs/grpo_evaluations.jsonl").unlink()
+        records_root = self.root / "continuations/v1"
+        record_path = records_root / "records/stages/travel-u19-i5-chain-1--stage-B--run-b.json"
+        request = {
+            "schema_version": PUBLICATION_REQUEST_SCHEMA,
+            "records_root": str(records_root), "chain_id": "travel-u19-i5-chain-1",
+            "stage": "B", "run_id": "run-b", "suite": "travel",
+            "user_task": "user_task_19", "injection_task": "injection_task_5",
+            "initialization_mode": "policy_warm", "reference_mode": "source",
+            "source_stage": "A", "source_cumulative_queries_used": 5,
+            "git_commit": "abc123", "resolved_config": {
+                "query_budget": 5, "source_checkpoint_path": "/stage-a/checkpoint.pt",
+                "source_checkpoint_sha256": "a" * 64,
+                "source_checkpoint_state_path": "/stage-a/checkpoint_state.json",
+                "source_checkpoint_state_sha256": "b" * 64,
+                "source_checkpoint_size_bytes": 123,
+                "source_checkpoint_state_size_bytes": 456,
+            },
+            "run_dir": str(self.run), "result_root": str(self.run.parent),
+            "stage_record_path": str(record_path), "configuration_fingerprint": "c" * 64,
+            "stage_start_time": "2026-08-04T00:00:00Z",
+            "stage_end_time": "2026-08-04T00:00:02Z", "stage_wall_clock_seconds": 2.0,
+        }
+        request_path = self.run / "stage-publication-request.json"
+        write_stage_publication_request(request_path, request)
+        with self.assertRaises(FileNotFoundError):
+            publish_stage_record(request_path, stdout)
+        self.assertFalse(record_path.exists())
+
+    def test_post_rename_directory_fsync_failure_does_not_fail_publication(self):
+        stdout = self.run / "stdout.log"
+        stdout.write_text("finalized log\n", encoding="utf-8")
+        records_root = self.root / "continuations/v1"
+        record_path = records_root / "records/stages/travel-u19-i5-chain-1--stage-B--run-b.json"
+        request = {
+            "schema_version": PUBLICATION_REQUEST_SCHEMA,
+            "records_root": str(records_root), "chain_id": "travel-u19-i5-chain-1",
+            "stage": "B", "run_id": "run-b", "suite": "travel",
+            "user_task": "user_task_19", "injection_task": "injection_task_5",
+            "initialization_mode": "policy_warm", "reference_mode": "source",
+            "source_stage": "A", "source_cumulative_queries_used": 5,
+            "git_commit": "abc123", "resolved_config": {
+                "query_budget": 5, "source_checkpoint_path": "/stage-a/checkpoint.pt",
+                "source_checkpoint_sha256": "a" * 64,
+                "source_checkpoint_state_path": "/stage-a/checkpoint_state.json",
+                "source_checkpoint_state_sha256": "b" * 64,
+                "source_checkpoint_size_bytes": 123,
+                "source_checkpoint_state_size_bytes": 456,
+            },
+            "run_dir": str(self.run), "result_root": str(self.run.parent),
+            "stage_record_path": str(record_path), "configuration_fingerprint": "c" * 64,
+            "stage_start_time": "2026-08-04T00:00:00Z",
+            "stage_end_time": "2026-08-04T00:00:02Z", "stage_wall_clock_seconds": 2.0,
+        }
+        request_path = self.run / "stage-publication-request.json"
+        write_stage_publication_request(request_path, request)
+        real_fsync = __import__("os").fsync
+        calls = 0
+
+        def fail_directory_fsync(descriptor):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("simulated directory fsync failure")
+            return real_fsync(descriptor)
+
+        with patch("rlpi.agentdojo.continuation_reporting.os.fsync", fail_directory_fsync):
+            self.assertEqual(publish_stage_record(request_path, stdout), record_path)
+        self.assertTrue(record_path.is_file())
 
     def test_discovery_hash_validation_ordering_metrics_and_cumulative_chains(self):
         self.finalize(stage="C", run_id="z", source_total=10, source_stage="B")

@@ -1,5 +1,8 @@
+import hashlib
+import json
 import logging
 import os
+import stat
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -17,7 +20,11 @@ from rlpi.agentdojo.experiment_reporting import (
     ExperimentReporting,
     log_final_experiment_summary,
 )
-from rlpi.agentdojo.continuation_reporting import finalize_stage_record, utc_now
+from rlpi.agentdojo.continuation_reporting import (
+    PUBLICATION_REQUEST_SCHEMA,
+    utc_now,
+    write_stage_publication_request,
+)
 from rlpi.agentdojo.utils import (
     calculate_average_scores,
     execute_single_benchmark,
@@ -43,6 +50,9 @@ def validate_continuation_config(cfg: DictConfig) -> None:
         "stage",
         "run_id",
         "git_commit",
+        "result_root",
+        "stage_record_path",
+        "configuration_fingerprint",
     )
     if cfg.get("continuation_records_root") is not None:
         missing = [field for field in record_fields if cfg.get(field) is None]
@@ -68,8 +78,21 @@ def validate_continuation_config(cfg: DictConfig) -> None:
             "reference_mode='source'"
         )
 
-    if cfg.get("continuation_records_root") is not None and cfg.get("source_stage") is None:
-        raise ValueError("policy_warm continuation stage records require source_stage")
+    if cfg.get("continuation_records_root") is not None:
+        required_source = (
+            "source_stage",
+            "source_checkpoint_sha256",
+            "source_checkpoint_size_bytes",
+            "source_checkpoint_state_path",
+            "source_checkpoint_state_sha256",
+            "source_checkpoint_state_size_bytes",
+            "source_stage_queries_used",
+        )
+        missing = [field for field in required_source if cfg.get(field) is None]
+        if missing:
+            raise ValueError(
+                "policy_warm continuation metadata is incomplete: " + ", ".join(missing)
+            )
 
 
 def _find_latest_checkpoint(logdir: Path) -> Optional[Path]:
@@ -92,6 +115,40 @@ def _find_latest_checkpoint(logdir: Path) -> Optional[Path]:
         return final_checkpoint
 
     return None
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validate_policy_warm_source(cfg: DictConfig) -> None:
+    """Verify exact source bytes and state immediately before warm-start."""
+    checkpoint = Path(cfg.source_checkpoint_path)
+    state_path = Path(cfg.source_checkpoint_state_path)
+    for path, expected_size, label in (
+        (checkpoint, int(cfg.source_checkpoint_size_bytes), "checkpoint"),
+        (state_path, int(cfg.source_checkpoint_state_size_bytes), "checkpoint state"),
+    ):
+        metadata = path.lstat()
+        if path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_size <= 0:
+            raise ValueError(f"Continuation source {label} must be a regular nonempty file: {path}")
+        if metadata.st_size != expected_size:
+            raise ValueError(f"Continuation source {label} size mismatch: {path}")
+    if _sha256_file(checkpoint) != str(cfg.source_checkpoint_sha256):
+        raise ValueError("Continuation source checkpoint SHA-256 mismatch")
+    if _sha256_file(state_path) != str(cfg.source_checkpoint_state_sha256):
+        raise ValueError("Continuation source checkpoint-state SHA-256 mismatch")
+    with state_path.open(encoding="utf-8") as handle:
+        state = json.load(handle)
+    learner_state = state.get("learner_state") if isinstance(state, dict) else None
+    if not isinstance(learner_state, dict) or learner_state.get("queries_used") != int(
+        cfg.source_stage_queries_used
+    ):
+        raise ValueError("Continuation source checkpoint-state query count mismatch")
 
 
 def _save_checkpoint(
@@ -391,27 +448,33 @@ def run_adaptive_attack(
         resolved_config = OmegaConf.to_container(cfg, resolve=True)
         if not isinstance(resolved_config, dict):
             raise TypeError("Resolved continuation configuration must be a mapping")
-        record_path = finalize_stage_record(
-            records_root=Path(cfg.continuation_records_root),
-            chain_id=cfg.chain_id,
-            stage=str(cfg.stage),
-            run_id=cfg.run_id,
-            suite=cfg.suite,
-            user_task=user_tasks_to_run[0].ID,
-            injection_task=next(iter(wrapped_tasks_dict)),
-            initialization_mode=cfg.initialization_mode,
-            reference_mode=cfg.reference_mode,
-            source_stage=cfg.get("source_stage"),
-            source_cumulative_queries_used=int(cfg.get("source_cumulative_queries_used", 0)),
-            git_commit=cfg.get("git_commit"),
-            resolved_config=resolved_config,
-            run_dir=logdir,
-            stage_start_time=stage_start_time,
-            stage_end_time=utc_now(),
-            stage_wall_clock_seconds=time.monotonic() - stage_started_monotonic,
-            stdout_log_path=logdir / "stdout.log",
+        request_path = write_stage_publication_request(
+            logdir / "stage-publication-request.json",
+            {
+                "schema_version": PUBLICATION_REQUEST_SCHEMA,
+                "records_root": str(cfg.continuation_records_root),
+                "chain_id": str(cfg.chain_id),
+                "stage": str(cfg.stage),
+                "run_id": str(cfg.run_id),
+                "suite": str(cfg.suite),
+                "user_task": user_tasks_to_run[0].ID,
+                "injection_task": next(iter(wrapped_tasks_dict)),
+                "initialization_mode": str(cfg.initialization_mode),
+                "reference_mode": str(cfg.reference_mode),
+                "source_stage": str(cfg.source_stage),
+                "source_cumulative_queries_used": int(cfg.source_cumulative_queries_used),
+                "git_commit": str(cfg.git_commit),
+                "resolved_config": resolved_config,
+                "run_dir": str(logdir.resolve()),
+                "result_root": str(cfg.result_root),
+                "stage_record_path": str(cfg.stage_record_path),
+                "configuration_fingerprint": str(cfg.configuration_fingerprint),
+                "stage_start_time": stage_start_time,
+                "stage_end_time": utc_now(),
+                "stage_wall_clock_seconds": time.monotonic() - stage_started_monotonic,
+            },
         )
-        logger.info("Finalized immutable continuation stage record: %s", record_path)
+        logger.info("Prepared continuation publication request: %s", request_path)
 
 
 def _setup_pipeline_and_components(
@@ -455,7 +518,17 @@ def _setup_pipeline_and_components(
     )
 
     if cfg.get("initialization_mode", "cold") == "policy_warm":
+        _validate_policy_warm_source(cfg)
         learner.load_policy_warm_start(cfg.source_checkpoint_path)
+        learner.continuation_provenance.update(
+            {
+                "source_checkpoint_state_path": str(cfg.source_checkpoint_state_path),
+                "source_checkpoint_state_sha256": str(cfg.source_checkpoint_state_sha256),
+                "source_checkpoint_size_bytes": int(cfg.source_checkpoint_size_bytes),
+                "source_checkpoint_state_size_bytes": int(cfg.source_checkpoint_state_size_bytes),
+                "source_stage_queries_used": int(cfg.source_stage_queries_used),
+            }
+        )
 
     if hasattr(learner, "set_experiment_reporting"):
         learner.set_experiment_reporting(experiment_reporting)

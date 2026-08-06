@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate deterministic sequential continuation Jobs from verified sources."""
+"""Generate deterministic Indexed continuation Jobs from verified sources."""
 
 from __future__ import annotations
 
@@ -32,11 +32,64 @@ INTENDED_RUNTIME_COMMIT: str | None = "66f4e040e891926bd493b5466d501d11b3f7fa96"
 CODE_COMMIT = INTENDED_RUNTIME_COMMIT
 RUNTIME_HARDENING_COMMIT = INTENDED_RUNTIME_COMMIT
 TEMPLATE_RUNTIME_COMMIT = "abfbad93c88766ba82f4195e43355d5d269a8c8b"
+RUNTIME_BRANCH = "experiment/stage-b-policy-warm-start"
+TEMPLATE_RUNTIME_BRANCH = "experiment/travel-u19-i5-stage-b-validation"
 QUERY_BUDGET = 260
 CAMPAIGN_VERSION = "v1"
 STAGE_RECORD_SCHEMA = "continuation-stage-record/v1"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 SAFE_COMPONENT = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+INDEXED_TASK_ENV_NAMES = (
+    "AI_SOURCE_CHECKPOINT",
+    "AI_SOURCE_STATE",
+    "AI_SOURCE_SHA256",
+    "AI_SOURCE_SIZE",
+    "AI_SOURCE_STATE_SHA256",
+    "AI_SOURCE_STATE_SIZE",
+    "AI_SOURCE_STAGE_QUERIES",
+    "AI_SOURCE_CUMULATIVE",
+    "AI_CHAIN_ID",
+    "AI_RUN_ID",
+    "AI_RESULT_ROOT",
+    "AI_STAGE_RECORD",
+    "AI_STAGE",
+    "AI_SOURCE_STAGE",
+    "AI_EXPERIMENT_ID",
+    "AI_SUITE",
+    "AI_USER_TASK",
+    "AI_INJECTION_TASK",
+    "AI_CONFIGURATION_FINGERPRINT",
+)
+INDEXED_TASK_KEY = "tasks.json"
+INDEXED_TASK_VOLUME = "indexed-task-map"
+INDEXED_TASK_MOUNT = "/indexed"
+INDEXED_TASK_FILE = f"{INDEXED_TASK_MOUNT}/{INDEXED_TASK_KEY}"
+INDEXED_COMPLETIONS = 32
+INDEXED_TASK_MAP_HASH_ANNOTATION = "autoinject.ucr.edu/task-map-sha256"
+INDEXED_POD_DEADLINE_SECONDS = 252000
+INDEXED_EXPECTED_RESOURCES = {
+    "cpu": "2",
+    "memory": "24Gi",
+    "nvidia.com/gpu": 1,
+}
+INDEXED_EXPECTED_GPU_AFFINITY = {
+    "nodeAffinity": {
+        "requiredDuringSchedulingIgnoredDuringExecution": {
+            "nodeSelectorTerms": [
+                {
+                    "matchExpressions": [
+                        {
+                            "key": "nvidia.com/gpu.product",
+                            "operator": "In",
+                            "values": ["NVIDIA-L40", "NVIDIA-L40S"],
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
+CANONICAL_SUITE_ORDER = ("workspace", "banking", "travel", "slack")
 
 STAGE_A_FIELDS = {
     "suite",
@@ -133,6 +186,21 @@ def expected_pairs() -> set[tuple[str, str, str]]:
 
 def pair_key(record: dict[str, Any]) -> tuple[str, str, str]:
     return record["suite"], record["user_task"], record["injection_task"]
+
+
+def canonical_task_key(record: dict[str, Any]) -> tuple[int, int, int]:
+    """Return the stable completion-index order used across equivalent inventories."""
+    try:
+        suite_index = CANONICAL_SUITE_ORDER.index(record["suite"])
+    except (KeyError, ValueError) as error:
+        raise GenerationError(f"Unexpected suite in canonical task order: {record!r}") from error
+    user_match = re.fullmatch(r"user_task_([0-9]+)", record.get("user_task", ""))
+    injection_match = re.fullmatch(
+        r"injection_task_([0-9]+)", record.get("injection_task", "")
+    )
+    if user_match is None or injection_match is None:
+        raise GenerationError(f"Invalid task identity: {pair_key(record)}")
+    return suite_index, int(user_match.group(1)), int(injection_match.group(1))
 
 
 def pair_slug(record: dict[str, Any]) -> str:
@@ -631,6 +699,39 @@ def replace_exact_count(text: str, old: str, new: str, count: int, label: str) -
     return text.replace(old, new)
 
 
+def validate_behavioral_template_invariants(template: dict[str, Any]) -> None:
+    """Reject launch-critical template drift before Indexed packaging begins."""
+    try:
+        job_spec = template["spec"]
+        pod_spec = job_spec["template"]["spec"]
+        container = pod_spec["containers"][0]
+    except (KeyError, IndexError, TypeError) as error:
+        raise GenerationError(f"Behavioral template structure is incomplete: {error}") from error
+    if job_spec.get("completions") != 1 or job_spec.get("parallelism") != 1:
+        raise GenerationError("Behavioral template must remain a single-completion Job")
+    if job_spec.get("backoffLimit") != 0:
+        raise GenerationError("Behavioral template backoffLimit must remain 0")
+    if job_spec.get("activeDeadlineSeconds") != INDEXED_POD_DEADLINE_SECONDS:
+        raise GenerationError(
+            "Behavioral template active deadline differs from the reviewed 252000 seconds"
+        )
+    if pod_spec.get("restartPolicy") != "Never":
+        raise GenerationError("Behavioral template restartPolicy must remain Never")
+    if pod_spec.get("automountServiceAccountToken") is not False:
+        raise GenerationError(
+            "Behavioral template must keep automountServiceAccountToken disabled"
+        )
+    resources = container.get("resources")
+    if not isinstance(resources, dict):
+        raise GenerationError("Behavioral template resources are missing")
+    if resources.get("requests") != INDEXED_EXPECTED_RESOURCES:
+        raise GenerationError("Behavioral template resource requests have drifted")
+    if resources.get("limits") != INDEXED_EXPECTED_RESOURCES:
+        raise GenerationError("Behavioral template resource limits have drifted")
+    if pod_spec.get("affinity") != INDEXED_EXPECTED_GPU_AFFINITY:
+        raise GenerationError("Behavioral template L40/L40S affinity has drifted")
+
+
 def load_behavioral_template(path: Path) -> dict[str, Any]:
     try:
         documents = list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
@@ -641,12 +742,8 @@ def load_behavioral_template(path: Path) -> dict[str, Any]:
     template = documents[0]
     if template.get("kind") != "Job" or template.get("metadata", {}).get("name") != "autoinject-travel-u19-i5-stage-b-r02":
         raise GenerationError("Unexpected behavioral template Job")
+    validate_behavioral_template_invariants(template)
     pod_spec = template["spec"]["template"]["spec"]
-    container = pod_spec["containers"][0]
-    if container["resources"]["requests"] != container["resources"]["limits"]:
-        raise GenerationError("Behavioral template resource requests and limits differ")
-    if container["resources"]["requests"].get("nvidia.com/gpu") != 1:
-        raise GenerationError("Behavioral template does not request exactly one GPU")
     runtime = next(volume for volume in pod_spec["volumes"] if volume["name"] == "runtime")
     if runtime["configMap"]["name"] != RUNTIME_CONFIG_MAP:
         raise GenerationError("Behavioral template runtime ConfigMap differs")
@@ -659,6 +756,8 @@ def verify_rendered_runtime_commit(
     """Ensure every runtime commit use was substituted from the single source."""
     init_shell = job["spec"]["template"]["spec"]["initContainers"][0]["args"][0]
     runtime_shell = job["spec"]["template"]["spec"]["containers"][0]["args"][0]
+    if f"BRANCH={RUNTIME_BRANCH}" not in init_shell:
+        raise GenerationError("Rendered Job init container has the wrong runtime branch")
     if f"COMMIT={commit}" not in init_shell:
         raise GenerationError("Rendered Job init container has the wrong runtime commit")
     if 'checkout --detach "${COMMIT}"' not in init_shell or 'rev-parse HEAD' not in init_shell:
@@ -670,6 +769,8 @@ def verify_rendered_runtime_commit(
     ) != commit:
         raise GenerationError("Rendered Job metadata has the wrong runtime commit")
     rendered = json.dumps(job, sort_keys=True)
+    if TEMPLATE_RUNTIME_BRANCH != RUNTIME_BRANCH and TEMPLATE_RUNTIME_BRANCH in rendered:
+        raise GenerationError("Rendered Job retains the old template runtime branch")
     if TEMPLATE_RUNTIME_COMMIT != commit and TEMPLATE_RUNTIME_COMMIT in rendered:
         raise GenerationError("Rendered Job retains the old template runtime commit")
     if index_record.get("code_commit") != commit:
@@ -708,6 +809,12 @@ def render_job(
     init_container = job["spec"]["template"]["spec"]["initContainers"][0]
     init_shell = replace_once(
         init_container["args"][0],
+        f"BRANCH={TEMPLATE_RUNTIME_BRANCH}",
+        f"BRANCH={RUNTIME_BRANCH}",
+        "init-container runtime branch",
+    )
+    init_shell = replace_once(
+        init_shell,
         f"COMMIT={TEMPLATE_RUNTIME_COMMIT}",
         f"COMMIT={commit}",
         "init-container runtime commit",
@@ -879,6 +986,433 @@ def render_job(
     return job, index_record
 
 
+
+
+def validate_parallelism(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise GenerationError(f"parallelism must be an integer: {value!r}")
+    if not 1 <= value <= INDEXED_COMPLETIONS:
+        raise GenerationError(
+            f"parallelism must be between 1 and {INDEXED_COMPLETIONS}: {value!r}"
+        )
+    return value
+
+
+def indexed_resource_names(
+    target_stage: str, task_map_sha256: str | None = None
+) -> tuple[str, str]:
+    stage_lower = target_stage.lower()
+    job_name = f"autoinject-stage-{stage_lower}-{CAMPAIGN_VERSION}"
+    suffix = "" if task_map_sha256 is None else f"-{validate_sha256(task_map_sha256, 'task-map hash')[:12]}"
+    config_map_name = f"{job_name}-tasks{suffix}"
+    for label, value in (
+        ("Indexed Job name", job_name),
+        ("task ConfigMap name", config_map_name),
+    ):
+        if SAFE_COMPONENT.fullmatch(value) is None or len(value) > 63:
+            raise GenerationError(f"Unsafe {label}: {value!r}")
+    return job_name, config_map_name
+
+
+def expected_dynamic_environment(record: dict[str, Any]) -> dict[str, str]:
+    return {
+        "AI_SOURCE_CHECKPOINT": str(record["source_checkpoint_path"]),
+        "AI_SOURCE_STATE": str(record["source_checkpoint_state_path"]),
+        "AI_SOURCE_SHA256": str(record["source_checkpoint_sha256"]),
+        "AI_SOURCE_SIZE": str(record["source_checkpoint_size_bytes"]),
+        "AI_SOURCE_STATE_SHA256": str(record["source_checkpoint_state_sha256"]),
+        "AI_SOURCE_STATE_SIZE": str(record["source_checkpoint_state_size_bytes"]),
+        "AI_SOURCE_STAGE_QUERIES": str(record["source_stage_queries_used"]),
+        "AI_SOURCE_CUMULATIVE": str(record["source_cumulative_queries_used"]),
+        "AI_CHAIN_ID": str(record["chain_id"]),
+        "AI_RUN_ID": str(record["run_id"]),
+        "AI_RESULT_ROOT": str(record["result_root"]),
+        "AI_STAGE_RECORD": str(record["stage_record_path"]),
+        "AI_STAGE": str(record["stage"]),
+        "AI_SOURCE_STAGE": str(record["source_stage"]),
+        "AI_EXPERIMENT_ID": str(record["experiment_id"]),
+        "AI_SUITE": str(record["suite"]),
+        "AI_USER_TASK": str(record["user_task"]),
+        "AI_INJECTION_TASK": str(record["injection_task"]),
+        "AI_CONFIGURATION_FINGERPRINT": str(record["configuration_fingerprint"]),
+    }
+
+
+def normalize_rendered_job(
+    job: dict[str, Any], record: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, str]]:
+    normalized = copy.deepcopy(job)
+    metadata = normalized.get("metadata")
+    if not isinstance(metadata, dict):
+        raise GenerationError("Rendered Job lacks metadata")
+    metadata["name"] = "__indexed_job__"
+    labels = metadata.get("labels")
+    if not isinstance(labels, dict) or labels.pop("autoinject-suite", None) is None:
+        raise GenerationError("Rendered Job lacks the expected per-task suite label")
+
+    container = normalized["spec"]["template"]["spec"]["containers"][0]
+    retained_environment = []
+    dynamic_environment: dict[str, str] = {}
+    for entry in container.get("env", []):
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if name not in INDEXED_TASK_ENV_NAMES:
+            retained_environment.append(entry)
+            continue
+        if set(entry) != {"name", "value"} or not isinstance(entry["value"], str):
+            raise GenerationError(
+                f"Indexed task environment {name!r} is not a plain string value"
+            )
+        if name in dynamic_environment:
+            raise GenerationError(f"Duplicate indexed task environment value: {name}")
+        dynamic_environment[name] = entry["value"]
+    container["env"] = retained_environment
+
+    if set(dynamic_environment) != set(INDEXED_TASK_ENV_NAMES):
+        missing = sorted(set(INDEXED_TASK_ENV_NAMES) - set(dynamic_environment))
+        extra = sorted(set(dynamic_environment) - set(INDEXED_TASK_ENV_NAMES))
+        raise GenerationError(
+            f"Rendered Job has an invalid indexed environment set: "
+            f"missing={missing}, extra={extra}"
+        )
+    if dynamic_environment != expected_dynamic_environment(record):
+        raise GenerationError(
+            f"Rendered Job task environment disagrees with its audit record: "
+            f"{pair_key(record)}"
+        )
+    return normalized, dynamic_environment
+
+
+def validate_task_document(
+    document: dict[str, Any], records: list[dict[str, Any]]
+) -> None:
+    if (
+        document.get("schema_version") != 1
+        or document.get("task_count") != INDEXED_COMPLETIONS
+    ):
+        raise GenerationError("Indexed task document has the wrong schema or count")
+    tasks = document.get("tasks")
+    if not isinstance(tasks, list) or len(tasks) != INDEXED_COMPLETIONS:
+        raise GenerationError("Indexed task document must contain exactly 32 tasks")
+    if len(records) != INDEXED_COMPLETIONS:
+        raise GenerationError("Indexed audit inventory must contain exactly 32 records")
+
+    for index, (task, record) in enumerate(zip(tasks, records)):
+        if not isinstance(task, dict) or set(task) != {
+            "completion_index",
+            "pair",
+            "env",
+        }:
+            raise GenerationError(f"Indexed task {index} has invalid fields")
+        if task["completion_index"] != index:
+            raise GenerationError(f"Indexed task {index} has the wrong index")
+        expected_pair = {
+            "suite": record["suite"],
+            "user_task": record["user_task"],
+            "injection_task": record["injection_task"],
+        }
+        if task["pair"] != expected_pair:
+            raise GenerationError(f"Indexed task {index} has the wrong task identity")
+        if task["env"] != expected_dynamic_environment(record):
+            raise GenerationError(
+                f"Indexed task {index} disagrees with the audit inventory"
+            )
+        if record.get("completion_index") != index:
+            raise GenerationError(f"Audit record {index} has the wrong completion index")
+
+
+def indexed_task_loader_python() -> str:
+    expected = repr(INDEXED_TASK_ENV_NAMES)
+    return f"""import json
+import re
+import shlex
+import sys
+
+expected = set({expected})
+raw_index = sys.argv[2]
+if re.fullmatch(r"(0|[1-9][0-9]*)", raw_index) is None:
+    raise SystemExit("invalid JOB_COMPLETION_INDEX")
+index = int(raw_index)
+with open(sys.argv[1], encoding="utf-8") as handle:
+    document = json.load(handle)
+if document.get("schema_version") != 1:
+    raise SystemExit("invalid indexed task schema")
+tasks = document.get("tasks")
+if (
+    document.get("task_count") != {INDEXED_COMPLETIONS}
+    or not isinstance(tasks, list)
+    or len(tasks) != {INDEXED_COMPLETIONS}
+):
+    raise SystemExit("invalid indexed task count")
+if not 0 <= index < len(tasks):
+    raise SystemExit("JOB_COMPLETION_INDEX out of range")
+task = tasks[index]
+if (
+    not isinstance(task, dict)
+    or set(task) != {{"completion_index", "pair", "env"}}
+    or task.get("completion_index") != index
+):
+    raise SystemExit("indexed task record mismatch")
+env = task.get("env")
+if not isinstance(env, dict) or set(env) != expected:
+    raise SystemExit("indexed task environment mismatch")
+for name in sorted(expected):
+    value = env[name]
+    if not isinstance(value, str) or "\\x00" in value:
+        raise SystemExit(f"invalid indexed task value: {{name}}")
+    print(f"export {{name}}={{shlex.quote(value)}}")
+"""
+
+
+def indexed_task_bootstrap(task_map_sha256: str) -> str:
+    task_map_sha256 = validate_sha256(task_map_sha256, "task-map hash")
+    loader = indexed_task_loader_python()
+    return f"""TASK_MAP="{INDEXED_TASK_FILE}"
+TASK_MAP_SHA256="{task_map_sha256}"
+test "$(sha256sum "${{TASK_MAP}}" | awk '{{print $1}}')" = "${{TASK_MAP_SHA256}}"
+: "${{JOB_COMPLETION_INDEX:?missing JOB_COMPLETION_INDEX}}"
+TASK_EXPORTS="$("${{PYTHON}}" - "${{TASK_MAP}}" "${{JOB_COMPLETION_INDEX}}" <<'PY'
+{loader}PY
+)"
+eval "${{TASK_EXPORTS}}"
+"""
+
+
+def validate_indexed_job_invariants(
+    job: dict[str, Any],
+    config_map_name: str,
+    task_map_sha256: str,
+    parallelism: int,
+) -> None:
+    """Validate every launch-critical field on the packaged Indexed Job."""
+    task_map_sha256 = validate_sha256(task_map_sha256, "task-map hash")
+    parallelism = validate_parallelism(parallelism)
+    try:
+        spec = job["spec"]
+        pod_spec = spec["template"]["spec"]
+        container = pod_spec["containers"][0]
+    except (KeyError, IndexError, TypeError) as error:
+        raise GenerationError(f"Indexed Job structure is incomplete: {error}") from error
+    if (
+        spec.get("completionMode") != "Indexed"
+        or spec.get("completions") != INDEXED_COMPLETIONS
+        or spec.get("parallelism") != parallelism
+        or spec.get("backoffLimitPerIndex") != 0
+        or spec.get("maxFailedIndexes") != INDEXED_COMPLETIONS
+        or "backoffLimit" in spec
+        or "activeDeadlineSeconds" in spec
+    ):
+        raise GenerationError("Indexed Job control settings have drifted")
+    if pod_spec.get("activeDeadlineSeconds") != INDEXED_POD_DEADLINE_SECONDS:
+        raise GenerationError("Indexed Pod deadline has drifted")
+    if pod_spec.get("restartPolicy") != "Never":
+        raise GenerationError("Indexed Pod restartPolicy has drifted")
+    if pod_spec.get("automountServiceAccountToken") is not False:
+        raise GenerationError("Indexed Pod service-account-token setting has drifted")
+    resources = container.get("resources")
+    if not isinstance(resources, dict) or resources.get("requests") != INDEXED_EXPECTED_RESOURCES or resources.get("limits") != INDEXED_EXPECTED_RESOURCES:
+        raise GenerationError("Indexed Job resources have drifted")
+    if pod_spec.get("affinity") != INDEXED_EXPECTED_GPU_AFFINITY:
+        raise GenerationError("Indexed Job L40/L40S affinity has drifted")
+
+    matching_volumes = [
+        volume for volume in pod_spec.get("volumes", [])
+        if isinstance(volume, dict) and volume.get("name") == INDEXED_TASK_VOLUME
+    ]
+    if matching_volumes != [
+        {"name": INDEXED_TASK_VOLUME, "configMap": {"name": config_map_name}}
+    ]:
+        raise GenerationError("Indexed task ConfigMap volume wiring has drifted")
+    matching_mounts = [
+        mount for mount in container.get("volumeMounts", [])
+        if isinstance(mount, dict) and mount.get("name") == INDEXED_TASK_VOLUME
+    ]
+    if matching_mounts != [
+        {
+            "name": INDEXED_TASK_VOLUME,
+            "mountPath": INDEXED_TASK_MOUNT,
+            "readOnly": True,
+        }
+    ]:
+        raise GenerationError("Indexed task ConfigMap mount wiring has drifted")
+    completion_env = [
+        entry for entry in container.get("env", [])
+        if isinstance(entry, dict) and entry.get("name") == "JOB_COMPLETION_INDEX"
+    ]
+    expected_completion_env = {
+        "name": "JOB_COMPLETION_INDEX",
+        "valueFrom": {
+            "fieldRef": {
+                "fieldPath": (
+                    "metadata.annotations['batch.kubernetes.io/"
+                    "job-completion-index']"
+                )
+            }
+        },
+    }
+    if completion_env != [expected_completion_env]:
+        raise GenerationError("Indexed completion-index environment wiring has drifted")
+    shell = container.get("args", [None])[0]
+    if not isinstance(shell, str) or indexed_task_bootstrap(task_map_sha256) not in shell:
+        raise GenerationError("Indexed task bootstrap or task-map hash binding has drifted")
+    if job.get("metadata", {}).get("annotations", {}).get(
+        INDEXED_TASK_MAP_HASH_ANNOTATION
+    ) != task_map_sha256:
+        raise GenerationError("Indexed Job task-map hash annotation has drifted")
+
+
+def package_indexed_resources(
+    jobs: list[dict[str, Any]],
+    records: list[dict[str, Any]],
+    target_stage: str,
+    parallelism: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    parallelism = validate_parallelism(parallelism)
+    if len(jobs) != INDEXED_COMPLETIONS or len(records) != INDEXED_COMPLETIONS:
+        raise GenerationError(
+            "Indexed packaging requires exactly 32 rendered Jobs and audit records"
+        )
+    indexed_job_name, _ = indexed_resource_names(target_stage)
+
+    common_template: dict[str, Any] | None = None
+    tasks: list[dict[str, Any]] = []
+    indexed_records: list[dict[str, Any]] = []
+    paired = sorted(zip(jobs, records), key=lambda item: canonical_task_key(item[1]))
+    for index, (job, record) in enumerate(paired):
+        normalized, dynamic_environment = normalize_rendered_job(job, record)
+        if common_template is None:
+            common_template = normalized
+        elif normalized != common_template:
+            raise GenerationError(
+                "Unexpected non-task-specific difference between rendered Jobs: "
+                f"{pair_key(record)}"
+            )
+        indexed_record = copy.deepcopy(record)
+        indexed_record["completion_index"] = index
+        indexed_record["indexed_job_name"] = indexed_job_name
+        indexed_records.append(indexed_record)
+        tasks.append(
+            {
+                "completion_index": index,
+                "pair": {
+                    "suite": record["suite"],
+                    "user_task": record["user_task"],
+                    "injection_task": record["injection_task"],
+                },
+                "env": dynamic_environment,
+            }
+        )
+
+    if common_template is None:
+        raise GenerationError("No rendered Job is available for Indexed packaging")
+
+    task_document = {
+        "schema_version": 1,
+        "task_count": INDEXED_COMPLETIONS,
+        "tasks": tasks,
+    }
+    task_map_text = json.dumps(task_document, indent=2, sort_keys=True) + "\n"
+    task_map_sha256 = hashlib.sha256(task_map_text.encode()).hexdigest()
+    indexed_job_name, config_map_name = indexed_resource_names(
+        target_stage, task_map_sha256
+    )
+    for record in indexed_records:
+        record["task_config_map"] = config_map_name
+        record["task_map_sha256"] = task_map_sha256
+    validate_task_document(task_document, indexed_records)
+
+    indexed_job = common_template
+    indexed_job["metadata"]["name"] = indexed_job_name
+    indexed_job["metadata"]["labels"]["autoinject-suite"] = "multi"
+    indexed_job["metadata"].setdefault("annotations", {})[
+        INDEXED_TASK_MAP_HASH_ANNOTATION
+    ] = task_map_sha256
+    job_spec = indexed_job["spec"]
+    original_deadline = job_spec.pop("activeDeadlineSeconds", None)
+    if original_deadline != INDEXED_POD_DEADLINE_SECONDS:
+        raise GenerationError(
+            "Behavioral template active deadline differs from the reviewed 252000 seconds"
+        )
+    original_backoff = job_spec.pop("backoffLimit", None)
+    if original_backoff != 0:
+        raise GenerationError("Behavioral template backoffLimit differs from reviewed 0")
+    job_spec["completionMode"] = "Indexed"
+    job_spec["completions"] = INDEXED_COMPLETIONS
+    job_spec["parallelism"] = parallelism
+    job_spec["backoffLimitPerIndex"] = 0
+    job_spec["maxFailedIndexes"] = INDEXED_COMPLETIONS
+
+    pod_spec = job_spec["template"]["spec"]
+    if "activeDeadlineSeconds" in pod_spec:
+        raise GenerationError("Behavioral template already has a Pod active deadline")
+    pod_spec["activeDeadlineSeconds"] = original_deadline
+    if any(volume.get("name") == INDEXED_TASK_VOLUME for volume in pod_spec["volumes"]):
+        raise GenerationError("Indexed task volume name already exists")
+    pod_spec["volumes"].append(
+        {"name": INDEXED_TASK_VOLUME, "configMap": {"name": config_map_name}}
+    )
+
+    container = pod_spec["containers"][0]
+    if any(
+        mount.get("name") == INDEXED_TASK_VOLUME
+        for mount in container["volumeMounts"]
+    ):
+        raise GenerationError("Indexed task mount name already exists")
+    container["volumeMounts"].append(
+        {
+            "name": INDEXED_TASK_VOLUME,
+            "mountPath": INDEXED_TASK_MOUNT,
+            "readOnly": True,
+        }
+    )
+    if any(entry.get("name") == "JOB_COMPLETION_INDEX" for entry in container["env"]):
+        raise GenerationError("JOB_COMPLETION_INDEX is already defined")
+    container["env"].append(
+        {
+            "name": "JOB_COMPLETION_INDEX",
+            "valueFrom": {
+                "fieldRef": {
+                    "fieldPath": (
+                        "metadata.annotations['batch.kubernetes.io/"
+                        "job-completion-index']"
+                    )
+                }
+            },
+        }
+    )
+    container["args"][0] = replace_once(
+        container["args"][0],
+        "PYTHON=/opt/conda/bin/python\n",
+        "PYTHON=/opt/conda/bin/python\n" + indexed_task_bootstrap(task_map_sha256),
+        "Indexed task bootstrap insertion",
+    )
+
+    config_map = {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {
+            "name": config_map_name,
+            "namespace": indexed_job["metadata"].get("namespace"),
+            "labels": {
+                "app.kubernetes.io/name": "autoinject-qwen3-small",
+                "autoinject-run-kind": (
+                    f"continuation-stage-{target_stage.lower()}-{CAMPAIGN_VERSION}"
+                ),
+                "autoinject-stage": target_stage.lower(),
+            },
+            "annotations": {
+                "autoinject.ucr.edu/code-commit": runtime_commit(),
+                INDEXED_TASK_MAP_HASH_ANNOTATION: task_map_sha256,
+            },
+        },
+        "immutable": True,
+        "data": {INDEXED_TASK_KEY: task_map_text},
+    }
+    validate_indexed_job_invariants(
+        indexed_job, config_map_name, task_map_sha256, parallelism
+    )
+    return [config_map, indexed_job], indexed_records
+
+
 def validate_generated(
     jobs: list[dict[str, Any]], index_records: list[dict[str, Any]], target_stage: str
 ) -> None:
@@ -918,7 +1452,13 @@ def render_yaml(jobs: list[dict[str, Any]]) -> str:
 
 
 def job_inventory_payload(
-    records: list[dict[str, Any]], target_stage: str, template_path: Path
+    records: list[dict[str, Any]],
+    target_stage: str,
+    template_path: Path,
+    parallelism: int,
+    indexed_job_name: str,
+    task_config_map: str,
+    task_map_sha256: str,
 ) -> dict[str, Any]:
     return {
         "schema_version": 2,
@@ -928,6 +1468,12 @@ def job_inventory_payload(
         "behavioral_template": str(template_path.relative_to(REPOSITORY_ROOT)),
         "runtime_config_map": RUNTIME_CONFIG_MAP,
         "code_commit": runtime_commit(),
+        "completion_mode": "Indexed",
+        "completions": INDEXED_COMPLETIONS,
+        "parallelism": validate_parallelism(parallelism),
+        "indexed_job_name": indexed_job_name,
+        "task_config_map": task_config_map,
+        "task_map_sha256": validate_sha256(task_map_sha256, "task-map hash"),
         "records": records,
     }
 
@@ -959,15 +1505,69 @@ def verify_generated_pair(manifest: str, inventory: str) -> None:
     ).hexdigest()
     if document.get("job_inventory_payload_sha256") != payload_hash:
         raise GenerationError("Generated job-inventory payload SHA-256 mismatch")
-    jobs = list(yaml.safe_load_all(manifest))
+    resources = list(yaml.safe_load_all(manifest))
     if any(
-        job.get("metadata", {}).get("annotations", {}).get(
+        resource.get("metadata", {}).get("annotations", {}).get(
             "autoinject.ucr.edu/job-inventory-payload-sha256"
         )
         != payload_hash
-        for job in jobs
+        for resource in resources
     ):
         raise GenerationError("Generated YAML does not nominate its job inventory")
+
+    if document.get("completion_mode") != "Indexed":
+        return
+
+    if len(resources) != 2 or [resource.get("kind") for resource in resources] != [
+        "ConfigMap",
+        "Job",
+    ]:
+        raise GenerationError(
+            "Indexed continuation YAML must contain one ConfigMap and one Job"
+        )
+    config_map, job = resources
+    task_map_sha256 = validate_sha256(
+        document.get("task_map_sha256"), "inventory task-map hash"
+    )
+    expected_job_name, expected_config_map_name = indexed_resource_names(
+        document.get("target_stage"), task_map_sha256
+    )
+    if (
+        document.get("indexed_job_name") != expected_job_name
+        or document.get("task_config_map") != expected_config_map_name
+        or config_map.get("metadata", {}).get("name") != expected_config_map_name
+        or config_map.get("immutable") is not True
+    ):
+        raise GenerationError("Indexed task ConfigMap identity or immutability differs")
+    try:
+        task_map_text = config_map["data"][INDEXED_TASK_KEY]
+        task_document = json.loads(task_map_text)
+    except (KeyError, TypeError, json.JSONDecodeError) as error:
+        raise GenerationError(f"Indexed task ConfigMap is invalid: {error}") from error
+    if not isinstance(task_map_text, str) or hashlib.sha256(
+        task_map_text.encode()
+    ).hexdigest() != task_map_sha256:
+        raise GenerationError("Indexed task ConfigMap hash disagrees with inventory")
+    for resource in (config_map, job):
+        if resource.get("metadata", {}).get("annotations", {}).get(
+            INDEXED_TASK_MAP_HASH_ANNOTATION
+        ) != task_map_sha256:
+            raise GenerationError("Indexed resource task-map hash annotation differs")
+    records = document.get("records")
+    if not isinstance(records, list):
+        raise GenerationError("Generated audit inventory records are invalid")
+    validate_task_document(task_document, records)
+
+    spec = job.get("spec", {})
+    if job.get("metadata", {}).get("name") != expected_job_name:
+        raise GenerationError("Indexed Job identity disagrees with its inventory")
+    validate_indexed_job_invariants(
+        job, expected_config_map_name, task_map_sha256, document.get("parallelism")
+    )
+    if job.get("metadata", {}).get("annotations", {}).get(
+        "autoinject.ucr.edu/code-commit"
+    ) != document.get("code_commit"):
+        raise GenerationError("Indexed Job runtime commit disagrees with its inventory")
 
 
 def write_deterministic(path: Path, content: str) -> None:
@@ -999,10 +1599,12 @@ def generate(
     stage_a_inventory: Path,
     template_path: Path,
     predecessor_job_inventory: Path | None,
+    parallelism: int = 8,
     enforce_runtime_pin: bool = True,
 ) -> tuple[str, str, list[dict[str, Any]], list[dict[str, Any]]]:
     if enforce_runtime_pin:
         runtime_commit()
+    parallelism = validate_parallelism(parallelism)
     if stage_index(target_stage) == stage_index("A"):
         raise GenerationError("Stage A is not generated by the continuation generator")
     base_records = load_stage_a_inventory(stage_a_inventory)
@@ -1014,32 +1616,43 @@ def generate(
     jobs = [item[0] for item in rendered]
     index_records = [item[1] for item in rendered]
     validate_generated(jobs, index_records, target_stage)
-    payload = job_inventory_payload(index_records, target_stage, template_path)
+    resources, index_records = package_indexed_resources(
+        jobs, index_records, target_stage, parallelism
+    )
+    task_config_map = resources[0]["metadata"]["name"]
+    indexed_job_name = resources[1]["metadata"]["name"]
+    task_map_text = resources[0]["data"][INDEXED_TASK_KEY]
+    task_map_sha256 = hashlib.sha256(task_map_text.encode()).hexdigest()
+    payload = job_inventory_payload(
+        index_records,
+        target_stage,
+        template_path,
+        parallelism,
+        indexed_job_name,
+        task_config_map,
+        task_map_sha256,
+    )
     if payload["code_commit"] != runtime_commit():
         raise GenerationError("Generated inventory has the wrong runtime commit")
     payload_hash = hashlib.sha256(
         (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
     ).hexdigest()
-    for job in jobs:
-        job["metadata"].setdefault("annotations", {})[
+    for resource in resources:
+        resource["metadata"].setdefault("annotations", {})[
             "autoinject.ucr.edu/job-inventory-payload-sha256"
         ] = payload_hash
-    manifest = render_yaml(jobs)
+    manifest = render_yaml(resources)
     inventory = render_job_inventory(
         payload, hashlib.sha256(manifest.encode()).hexdigest()
     )
     verify_generated_pair(manifest, inventory)
-    return (
-        manifest,
-        inventory,
-        jobs,
-        index_records,
-    )
+    return manifest, inventory, resources, index_records
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", required=True, help="Target stage letter after A")
+    parser.add_argument("--parallelism", required=True, type=int)
     parser.add_argument("--stage-a-inventory", type=Path, default=DEFAULT_STAGE_A_INVENTORY)
     parser.add_argument("--template", type=Path, default=DEFAULT_TEMPLATE)
     parser.add_argument(
@@ -1073,6 +1686,7 @@ def main(argv: list[str] | None = None) -> int:
             stage_a_inventory=args.stage_a_inventory,
             template_path=args.template,
             predecessor_job_inventory=predecessor_inventory,
+            parallelism=args.parallelism,
             enforce_runtime_pin=True,
         )
         write_deterministic(output, manifest)
@@ -1082,7 +1696,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"WROTE_CONTINUATION_JOBS={output}")
     print(f"WROTE_CONTINUATION_JOB_INVENTORY={index_output}")
-    print(f"GENERATED_JOB_COUNT={len(jobs)}")
+    print("GENERATED_JOB_COUNT=1")
+    print(f"GENERATED_KUBERNETES_RESOURCE_COUNT={len(jobs)}")
+    print(f"GENERATED_COMPLETION_COUNT={INDEXED_COMPLETIONS}")
     return 0
 
 

@@ -3,6 +3,8 @@ import hashlib
 import json
 import os
 import subprocess
+import shlex
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -90,6 +92,7 @@ class ContinuationJobGeneratorTests(unittest.TestCase):
             stage_a_inventory=self.inventory_path,
             template_path=generator.DEFAULT_TEMPLATE,
             predecessor_job_inventory=None,
+            parallelism=8,
             enforce_runtime_pin=False,
         )
 
@@ -228,11 +231,81 @@ class ContinuationJobGeneratorTests(unittest.TestCase):
             ) = original
 
     def test_stage_b_integrity_budget_and_three_early_stops(self):
-        manifest, inventory_text, jobs, records = self.generate_stage_b()
-        self.assertEqual(len(jobs), 32)
-        self.assertEqual(len(list(yaml.safe_load_all(manifest))), 32)
+        manifest, inventory_text, resources, records = self.generate_stage_b()
+        documents = list(yaml.safe_load_all(manifest))
+        self.assertEqual(len(resources), 2)
+        self.assertEqual([document["kind"] for document in documents], ["ConfigMap", "Job"])
         generator.verify_generated_pair(manifest, inventory_text)
-        self.assertEqual(json.loads(inventory_text)["code_commit"], generator.runtime_commit())
+
+        inventory = json.loads(inventory_text)
+        self.assertEqual(inventory["code_commit"], generator.runtime_commit())
+        self.assertEqual(inventory["completion_mode"], "Indexed")
+        self.assertEqual(inventory["completions"], 32)
+        self.assertEqual(inventory["parallelism"], 8)
+        self.assertRegex(inventory["task_map_sha256"], r"[0-9a-f]{64}")
+
+        config_map, indexed_job = documents
+        self.assertIs(config_map["immutable"], True)
+        task_map_text = config_map["data"][generator.INDEXED_TASK_KEY]
+        self.assertEqual(
+            hashlib.sha256(task_map_text.encode()).hexdigest(),
+            inventory["task_map_sha256"],
+        )
+        self.assertTrue(
+            config_map["metadata"]["name"].endswith(
+                inventory["task_map_sha256"][:12]
+            )
+        )
+        for resource in (config_map, indexed_job):
+            self.assertEqual(
+                resource["metadata"]["annotations"][
+                    generator.INDEXED_TASK_MAP_HASH_ANNOTATION
+                ],
+                inventory["task_map_sha256"],
+            )
+        task_document = json.loads(task_map_text)
+        self.assertEqual(task_document["task_count"], 32)
+        self.assertEqual(
+            [task["completion_index"] for task in task_document["tasks"]],
+            list(range(32)),
+        )
+
+        spec = indexed_job["spec"]
+        self.assertEqual(spec["completionMode"], "Indexed")
+        self.assertEqual(spec["completions"], 32)
+        self.assertEqual(spec["parallelism"], 8)
+        self.assertEqual(spec["backoffLimitPerIndex"], 0)
+        self.assertEqual(spec["maxFailedIndexes"], 32)
+        self.assertNotIn("activeDeadlineSeconds", spec)
+
+        pod_spec = spec["template"]["spec"]
+        self.assertEqual(pod_spec["activeDeadlineSeconds"], 252000)
+        container = pod_spec["containers"][0]
+        self.assertEqual(
+            container["resources"]["requests"],
+            {"cpu": "2", "memory": "24Gi", "nvidia.com/gpu": 1},
+        )
+        self.assertEqual(
+            container["resources"]["limits"],
+            {"cpu": "2", "memory": "24Gi", "nvidia.com/gpu": 1},
+        )
+        affinity_values = (
+            pod_spec["affinity"]["nodeAffinity"]
+            ["requiredDuringSchedulingIgnoredDuringExecution"]
+            ["nodeSelectorTerms"][0]["matchExpressions"][0]["values"]
+        )
+        self.assertEqual(affinity_values, ["NVIDIA-L40", "NVIDIA-L40S"])
+
+        shell = container["args"][0]
+        self.assertIn('pipeline_status=("${PIPESTATUS[@]}")', shell)
+        self.assertIn(
+            'exec "${PYTHON}" -m rlpi.agentdojo.continuation_reporting', shell
+        )
+        self.assertNotIn("cp /work/stage-b-stdout.log", shell)
+        self.assertIn("JOB_COMPLETION_INDEX", shell)
+        self.assertIn(generator.INDEXED_TASK_FILE, shell)
+        self.assertIn(inventory["task_map_sha256"], shell)
+
         early = {
             generator.pair_key(record)
             for record in records
@@ -246,14 +319,228 @@ class ContinuationJobGeneratorTests(unittest.TestCase):
                 ("slack", "user_task_20", "injection_task_3"),
             },
         )
-        for job, record in zip(jobs, records):
+        self.assertEqual(
+            [record["completion_index"] for record in records], list(range(32))
+        )
+        self.assertEqual(
+            {generator.pair_key(record) for record in records},
+            generator.expected_pairs(),
+        )
+        for task, record in zip(task_document["tasks"], records):
             self.assertEqual(record["query_budget"], 260)
             self.assertIn("source_checkpoint_state_sha256", record)
-            shell = job["spec"]["template"]["spec"]["containers"][0]["args"][0]
-            self.assertIn('pipeline_status=("${PIPESTATUS[@]}")', shell)
-            self.assertIn('exec "${PYTHON}" -m rlpi.agentdojo.continuation_reporting', shell)
-            self.assertNotIn("cp /work/stage-b-stdout.log", shell)
             self.assertEqual(record["code_commit"], generator.runtime_commit())
+            self.assertEqual(
+                task["env"], generator.expected_dynamic_environment(record)
+            )
+
+    def test_parallelism_bounds_and_required_cli_argument(self):
+        for value in (0, 33):
+            with self.subTest(parallelism=value), self.assertRaisesRegex(
+                generator.GenerationError, "parallelism"
+            ):
+                generator.generate(
+                    target_stage="B",
+                    stage_a_inventory=self.inventory_path,
+                    template_path=generator.DEFAULT_TEMPLATE,
+                    predecessor_job_inventory=None,
+                    parallelism=value,
+                    enforce_runtime_pin=False,
+                )
+        with self.assertRaises(SystemExit):
+            generator.parse_args(["--stage", "B"])
+
+    def test_unexpected_common_template_drift_fails_closed(self):
+        rendered = [
+            generator.render_job(
+                self.template, generator.source_from_stage_a(record), "B"
+            )
+            for record in self.base_records
+        ]
+        jobs = [item[0] for item in rendered]
+        records = [item[1] for item in rendered]
+        jobs[1]["spec"]["template"]["spec"]["containers"][0]["resources"][
+            "requests"
+        ]["memory"] = "16Gi"
+        with self.assertRaisesRegex(
+            generator.GenerationError, "Unexpected non-task-specific difference"
+        ):
+            generator.package_indexed_resources(jobs, records, "B", 8)
+
+    def test_indexed_task_bootstrap_fails_closed(self):
+        manifest, inventory_text, _, _ = self.generate_stage_b()
+        config_map = list(yaml.safe_load_all(manifest))[0]
+        inventory = json.loads(inventory_text)
+        with tempfile.TemporaryDirectory() as directory:
+            task_map = Path(directory) / "tasks.json"
+            task_map.write_text(
+                config_map["data"][generator.INDEXED_TASK_KEY], encoding="utf-8"
+            )
+            bootstrap = generator.indexed_task_bootstrap(
+                inventory["task_map_sha256"]
+            ).replace(generator.INDEXED_TASK_FILE, str(task_map))
+            script = (
+                "set -Eeuo pipefail\n"
+                f"PYTHON={shlex.quote(sys.executable)}\n"
+                f"{bootstrap}"
+                'printf "OK:%s:%s\\n" "${AI_SUITE}" "${AI_USER_TASK}"\n'
+            )
+
+            valid_environment = os.environ.copy()
+            valid_environment["JOB_COMPLETION_INDEX"] = "0"
+            valid = subprocess.run(
+                ["bash", "-c", script],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=valid_environment,
+            )
+            self.assertEqual(valid.returncode, 0, valid.stderr)
+            self.assertTrue(valid.stdout.startswith("OK:"))
+
+            for value in (None, "abc", "-1", "32"):
+                with self.subTest(index=value):
+                    environment = os.environ.copy()
+                    if value is not None:
+                        environment["JOB_COMPLETION_INDEX"] = value
+                    else:
+                        environment.pop("JOB_COMPLETION_INDEX", None)
+                    failed = subprocess.run(
+                        ["bash", "-c", script],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        env=environment,
+                    )
+                    self.assertNotEqual(failed.returncode, 0)
+
+            task_map.write_text(
+                task_map.read_text(encoding="utf-8") + " ", encoding="utf-8"
+            )
+            tampered = subprocess.run(
+                ["bash", "-c", script],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=valid_environment,
+            )
+            self.assertNotEqual(tampered.returncode, 0)
+
+    def test_behavioral_template_invariants_fail_closed(self):
+        mutations = (
+            (lambda value: value["spec"].__setitem__("backoffLimit", 1), "backoffLimit"),
+            (
+                lambda value: value["spec"]["template"]["spec"]["containers"][0][
+                    "resources"
+                ]["requests"].__setitem__("memory", "16Gi"),
+                "resource requests",
+            ),
+            (
+                lambda value: value["spec"]["template"]["spec"]["affinity"][
+                    "nodeAffinity"
+                ]["requiredDuringSchedulingIgnoredDuringExecution"][
+                    "nodeSelectorTerms"
+                ][0]["matchExpressions"][0]["values"].__setitem__(0, "NVIDIA-A100"),
+                "affinity",
+            ),
+            (
+                lambda value: value["spec"]["template"]["spec"].__setitem__(
+                    "restartPolicy", "Always"
+                ),
+                "restartPolicy",
+            ),
+            (
+                lambda value: value["spec"]["template"]["spec"].__setitem__(
+                    "automountServiceAccountToken", True
+                ),
+                "automountServiceAccountToken",
+            ),
+        )
+        for mutate, message in mutations:
+            with self.subTest(message=message):
+                template = copy.deepcopy(self.template)
+                mutate(template)
+                with self.assertRaisesRegex(generator.GenerationError, message):
+                    generator.validate_behavioral_template_invariants(template)
+
+    def test_completion_index_order_is_canonical_across_inventory_order(self):
+        baseline = self.generate_stage_b()[3]
+        with tempfile.TemporaryDirectory() as directory:
+            shuffled_path = Path(directory) / "stage-a-inventory-v3.json"
+            document = json.loads(self.inventory_path.read_text(encoding="utf-8"))
+            document["records"] = list(reversed(document["records"]))
+            shuffled_path.write_text(json.dumps(document), encoding="utf-8")
+            shuffled = generator.generate(
+                target_stage="B",
+                stage_a_inventory=shuffled_path,
+                template_path=generator.DEFAULT_TEMPLATE,
+                predecessor_job_inventory=None,
+                parallelism=8,
+                enforce_runtime_pin=False,
+            )[3]
+        self.assertEqual(
+            [generator.pair_key(record) for record in shuffled],
+            [generator.pair_key(record) for record in baseline],
+        )
+        self.assertEqual(
+            [record["completion_index"] for record in shuffled], list(range(32))
+        )
+
+    def test_task_map_hash_and_launch_wiring_are_verified(self):
+        manifest, inventory_text, _, _ = self.generate_stage_b()
+        resources = list(yaml.safe_load_all(manifest))
+        inventory = json.loads(inventory_text)
+
+        tampered_map = copy.deepcopy(resources)
+        tampered_map[0]["data"][generator.INDEXED_TASK_KEY] += " "
+        tampered_manifest = generator.render_yaml(tampered_map)
+        tampered_inventory = copy.deepcopy(inventory)
+        tampered_inventory["generated_yaml_sha256"] = hashlib.sha256(
+            tampered_manifest.encode()
+        ).hexdigest()
+        with self.assertRaisesRegex(generator.GenerationError, "ConfigMap hash"):
+            generator.verify_generated_pair(
+                tampered_manifest, json.dumps(tampered_inventory)
+            )
+
+        drifted_job = copy.deepcopy(resources)
+        drifted_job[1]["spec"]["template"]["spec"]["containers"][0][
+            "resources"
+        ]["limits"]["memory"] = "16Gi"
+        drifted_manifest = generator.render_yaml(drifted_job)
+        drifted_inventory = copy.deepcopy(inventory)
+        drifted_inventory["generated_yaml_sha256"] = hashlib.sha256(
+            drifted_manifest.encode()
+        ).hexdigest()
+        with self.assertRaisesRegex(generator.GenerationError, "resources"):
+            generator.verify_generated_pair(
+                drifted_manifest, json.dumps(drifted_inventory)
+            )
+
+    def test_rendered_runtime_branch_is_single_binding(self):
+        job, record = generator.render_job(
+            self.template, generator.source_from_stage_a(self.base_records[0]), "B"
+        )
+        init_shell = job["spec"]["template"]["spec"]["initContainers"][0]["args"][0]
+        self.assertIn(
+            "BRANCH=experiment/stage-b-policy-warm-start", init_shell
+        )
+        self.assertNotIn(
+            "BRANCH=experiment/travel-u19-i5-stage-b-validation", init_shell
+        )
+
+        stale = copy.deepcopy(job)
+        stale_shell = stale["spec"]["template"]["spec"]["initContainers"][0]["args"][0]
+        stale["spec"]["template"]["spec"]["initContainers"][0]["args"][0] = (
+            stale_shell.replace(
+                f"BRANCH={generator.RUNTIME_BRANCH}",
+                f"BRANCH={generator.TEMPLATE_RUNTIME_BRANCH}",
+            )
+        )
+        with self.assertRaisesRegex(generator.GenerationError, "runtime branch"):
+            generator.verify_rendered_runtime_commit(
+                stale, record, generator.runtime_commit()
+            )
 
     def test_rendered_runtime_commit_is_single_binding(self):
         original = (
@@ -377,6 +664,7 @@ class ContinuationJobGeneratorTests(unittest.TestCase):
                 generator.main(
                     [
                         "--stage", "C",
+                        "--parallelism", "8",
                         "--stage-a-inventory", str(self.inventory_path),
                         "--predecessor-job-inventory", str(inventory),
                         "--output", str(output),
@@ -548,6 +836,7 @@ class ContinuationJobGeneratorTests(unittest.TestCase):
                 status = generator.main(
                     [
                         "--stage", "C",
+                        "--parallelism", "8",
                         "--stage-a-inventory", str(self.inventory_path),
                         "--predecessor-job-inventory", str(Path(directory) / "missing.json"),
                         "--output", str(output),

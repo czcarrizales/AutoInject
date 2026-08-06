@@ -3,6 +3,8 @@ import hashlib
 import json
 import unittest
 
+import yaml
+
 from scripts import cross_pair_experiment
 from scripts import generate_continuation_jobs as continuation
 from scripts import generate_cross_pair_jobs
@@ -352,6 +354,125 @@ class CrossPairJobGeneratorTests(unittest.TestCase):
                     spec["target"]["user_task"],
                     spec["target"]["injection_task"],
                 ),
+            )
+
+    def test_cross_pair_generation_is_deterministic(self):
+        first = generate_cross_pair_jobs.generate_cross_pair(
+            parallelism=8,
+        )
+        second = generate_cross_pair_jobs.generate_cross_pair(
+            parallelism=8,
+        )
+
+        self.assertEqual(first[0], second[0])
+        self.assertEqual(first[1], second[1])
+        self.assertEqual(first[2], second[2])
+        self.assertEqual(first[3], second[3])
+        generate_cross_pair_jobs.verify_cross_pair_generated_pair(
+            first[0],
+            first[1],
+        )
+
+    def test_inventory_uses_cross_pair_semantics_and_32_records(self):
+        manifest, inventory, _, _ = (
+            generate_cross_pair_jobs.generate_cross_pair(
+                parallelism=8,
+            )
+        )
+        document = json.loads(inventory)
+
+        self.assertEqual(
+            document["condition"],
+            cross_pair_experiment.CONDITION,
+        )
+        self.assertEqual(document["record_stage"], "X")
+        self.assertEqual(document["source_stage"], "A")
+        self.assertEqual(document["query_budget"], 260)
+        self.assertEqual(document["completion_mode"], "Indexed")
+        self.assertEqual(document["completions"], 32)
+        self.assertEqual(document["parallelism"], 8)
+        self.assertEqual(len(document["records"]), 32)
+        self.assertNotIn("target_stage", document)
+
+        first = document["records"][0]
+        self.assertEqual(first["target"], self.specs[0]["target"])
+        self.assertEqual(first["source"], self.specs[0]["source"])
+        self.assertEqual(
+            first["source_checkpoint_path"],
+            self.specs[0]["source_checkpoint_path"],
+        )
+        self.assertTrue(manifest.startswith("---"))
+
+    def test_manifest_resources_are_bound_to_inventory_hash(self):
+        manifest, inventory, _, _ = (
+            generate_cross_pair_jobs.generate_cross_pair(
+                parallelism=8,
+            )
+        )
+        document = json.loads(inventory)
+        resources = list(yaml.safe_load_all(manifest))
+
+        self.assertEqual(
+            [resource["kind"] for resource in resources],
+            ["ConfigMap", "Job"],
+        )
+        for resource in resources:
+            annotations = resource["metadata"]["annotations"]
+            self.assertEqual(
+                annotations[
+                    "autoinject.ucr.edu/job-inventory-payload-sha256"
+                ],
+                document["job_inventory_payload_sha256"],
+            )
+            self.assertEqual(
+                annotations[
+                    continuation.INDEXED_TASK_MAP_HASH_ANNOTATION
+                ],
+                document["task_map_sha256"],
+            )
+
+    def test_verifier_rejects_tampered_manifest(self):
+        manifest, inventory, _, _ = (
+            generate_cross_pair_jobs.generate_cross_pair(
+                parallelism=8,
+            )
+        )
+        tampered = manifest.replace(
+            "autoinject-cross-pair-v1",
+            "autoinject-cross-pair-bad",
+            1,
+        )
+
+        with self.assertRaisesRegex(
+            generate_cross_pair_jobs.CrossPairJobGenerationError,
+            "SHA-256 mismatch",
+        ):
+            generate_cross_pair_jobs.verify_cross_pair_generated_pair(
+                tampered,
+                inventory,
+            )
+
+    def test_verifier_rejects_tampered_inventory(self):
+        manifest, inventory, _, _ = (
+            generate_cross_pair_jobs.generate_cross_pair(
+                parallelism=8,
+            )
+        )
+        document = json.loads(inventory)
+        document["indexed_job_name"] = "autoinject-cross-pair-bad"
+        tampered = json.dumps(
+            document,
+            indent=2,
+            sort_keys=True,
+        ) + "\n"
+
+        with self.assertRaisesRegex(
+            generate_cross_pair_jobs.CrossPairJobGenerationError,
+            "payload SHA-256 mismatch",
+        ):
+            generate_cross_pair_jobs.verify_cross_pair_generated_pair(
+                manifest,
+                tampered,
             )
 
 if __name__ == "__main__":

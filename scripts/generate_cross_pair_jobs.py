@@ -5,7 +5,11 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from scripts import cross_pair_experiment
 from scripts import generate_continuation_jobs as continuation
@@ -389,3 +393,360 @@ def package_cross_pair_indexed_resources(
         parallelism,
     )
     return resources, indexed_records
+
+def cross_pair_job_inventory_payload(
+    records: list[dict[str, Any]],
+    template_path: Path,
+    parallelism: int,
+    indexed_job_name: str,
+    task_config_map: str,
+    task_map_sha256: str,
+) -> dict[str, Any]:
+    """Build the deterministic audit payload for the cross-pair campaign."""
+    parallelism = continuation.validate_parallelism(parallelism)
+    task_map_sha256 = continuation.validate_sha256(
+        task_map_sha256,
+        "cross-pair task-map hash",
+    )
+    if len(records) != continuation.INDEXED_COMPLETIONS:
+        raise CrossPairJobGenerationError(
+            "Cross-pair inventory requires exactly 32 records"
+        )
+
+    for index, record in enumerate(records):
+        _validate_spec(record)
+        if record.get("completion_index") != index:
+            raise CrossPairJobGenerationError(
+                f"Cross-pair inventory record {index} has the wrong index"
+            )
+        if record.get("indexed_job_name") != indexed_job_name:
+            raise CrossPairJobGenerationError(
+                f"Cross-pair inventory record {index} has the wrong Job name"
+            )
+        if record.get("task_config_map") != task_config_map:
+            raise CrossPairJobGenerationError(
+                f"Cross-pair inventory record {index} has the wrong ConfigMap"
+            )
+        if record.get("task_map_sha256") != task_map_sha256:
+            raise CrossPairJobGenerationError(
+                f"Cross-pair inventory record {index} has the wrong task-map hash"
+            )
+        if record.get("code_commit") != continuation.runtime_commit():
+            raise CrossPairJobGenerationError(
+                f"Cross-pair inventory record {index} has the wrong runtime commit"
+            )
+
+    resolved_template = Path(template_path).resolve()
+    repository_root = continuation.REPOSITORY_ROOT.resolve()
+    try:
+        relative_template = resolved_template.relative_to(repository_root)
+    except ValueError as error:
+        raise CrossPairJobGenerationError(
+            "Cross-pair behavioral template escapes the repository"
+        ) from error
+
+    return {
+        "schema_version": 1,
+        "condition": cross_pair_experiment.CONDITION,
+        "campaign_version": cross_pair_experiment.CAMPAIGN_VERSION,
+        "record_stage": cross_pair_experiment.RECORD_STAGE,
+        "source_stage": "A",
+        "initialization_mode": "policy_warm",
+        "reference_mode": "source",
+        "query_budget": cross_pair_experiment.QUERY_BUDGET,
+        "behavioral_template": str(relative_template),
+        "runtime_config_map": continuation.RUNTIME_CONFIG_MAP,
+        "code_commit": continuation.runtime_commit(),
+        "completion_mode": "Indexed",
+        "completions": continuation.INDEXED_COMPLETIONS,
+        "parallelism": parallelism,
+        "indexed_job_name": indexed_job_name,
+        "task_config_map": task_config_map,
+        "task_map_sha256": task_map_sha256,
+        "records": copy.deepcopy(records),
+    }
+
+
+def verify_cross_pair_generated_pair(manifest: str, inventory: str) -> None:
+    """Verify manifest, audit inventory, hashes, and cross-pair semantics together."""
+    try:
+        document = json.loads(inventory)
+    except json.JSONDecodeError as error:
+        raise CrossPairJobGenerationError(
+            f"Cross-pair inventory is invalid JSON: {error}"
+        ) from error
+    if not isinstance(document, dict):
+        raise CrossPairJobGenerationError(
+            "Cross-pair inventory must be a JSON object"
+        )
+
+    yaml_sha256 = hashlib.sha256(manifest.encode()).hexdigest()
+    if document.get("generated_yaml_sha256") != yaml_sha256:
+        raise CrossPairJobGenerationError(
+            "Cross-pair generated YAML/inventory SHA-256 mismatch"
+        )
+
+    payload = {
+        key: value
+        for key, value in document.items()
+        if key
+        not in {
+            "generated_yaml_sha256",
+            "job_inventory_payload_sha256",
+        }
+    }
+    payload_sha256 = hashlib.sha256(
+        (
+            json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+    ).hexdigest()
+    if document.get("job_inventory_payload_sha256") != payload_sha256:
+        raise CrossPairJobGenerationError(
+            "Cross-pair job-inventory payload SHA-256 mismatch"
+        )
+
+    expected_header = {
+        "schema_version": 1,
+        "condition": cross_pair_experiment.CONDITION,
+        "campaign_version": cross_pair_experiment.CAMPAIGN_VERSION,
+        "record_stage": cross_pair_experiment.RECORD_STAGE,
+        "source_stage": "A",
+        "initialization_mode": "policy_warm",
+        "reference_mode": "source",
+        "query_budget": cross_pair_experiment.QUERY_BUDGET,
+        "runtime_config_map": continuation.RUNTIME_CONFIG_MAP,
+        "code_commit": continuation.runtime_commit(),
+        "completion_mode": "Indexed",
+        "completions": continuation.INDEXED_COMPLETIONS,
+    }
+    for field, expected in expected_header.items():
+        if document.get(field) != expected:
+            raise CrossPairJobGenerationError(
+                f"Cross-pair inventory has invalid {field}: "
+                f"{document.get(field)!r}"
+            )
+
+    parallelism = continuation.validate_parallelism(
+        document.get("parallelism")
+    )
+    task_map_sha256 = continuation.validate_sha256(
+        document.get("task_map_sha256"),
+        "cross-pair inventory task-map hash",
+    )
+    expected_job_name, expected_config_map_name = (
+        cross_pair_indexed_resource_names(task_map_sha256)
+    )
+    if document.get("indexed_job_name") != expected_job_name:
+        raise CrossPairJobGenerationError(
+            "Cross-pair inventory has the wrong Indexed Job name"
+        )
+    if document.get("task_config_map") != expected_config_map_name:
+        raise CrossPairJobGenerationError(
+            "Cross-pair inventory has the wrong task ConfigMap name"
+        )
+
+    try:
+        resources = list(yaml.safe_load_all(manifest))
+    except yaml.YAMLError as error:
+        raise CrossPairJobGenerationError(
+            f"Cross-pair generated YAML is invalid: {error}"
+        ) from error
+    if (
+        len(resources) != 2
+        or not all(isinstance(resource, dict) for resource in resources)
+        or [resource.get("kind") for resource in resources]
+        != ["ConfigMap", "Job"]
+    ):
+        raise CrossPairJobGenerationError(
+            "Cross-pair YAML must contain one ConfigMap and one Job"
+        )
+    config_map, indexed_job = resources
+
+    if config_map.get("metadata", {}).get("name") != expected_config_map_name:
+        raise CrossPairJobGenerationError(
+            "Cross-pair task ConfigMap identity differs from its inventory"
+        )
+    if config_map.get("immutable") is not True:
+        raise CrossPairJobGenerationError(
+            "Cross-pair task ConfigMap must be immutable"
+        )
+    if indexed_job.get("metadata", {}).get("name") != expected_job_name:
+        raise CrossPairJobGenerationError(
+            "Cross-pair Indexed Job identity differs from its inventory"
+        )
+
+    for resource in resources:
+        metadata = resource.get("metadata", {})
+        annotations = metadata.get("annotations", {})
+        labels = metadata.get("labels", {})
+        if (
+            annotations.get(continuation.INDEXED_TASK_MAP_HASH_ANNOTATION)
+            != task_map_sha256
+        ):
+            raise CrossPairJobGenerationError(
+                "Cross-pair resource task-map hash annotation differs"
+            )
+        if (
+            annotations.get(
+                "autoinject.ucr.edu/job-inventory-payload-sha256"
+            )
+            != payload_sha256
+        ):
+            raise CrossPairJobGenerationError(
+                "Cross-pair resource inventory hash annotation differs"
+            )
+        if (
+            annotations.get("autoinject.ucr.edu/code-commit")
+            != continuation.runtime_commit()
+        ):
+            raise CrossPairJobGenerationError(
+                "Cross-pair resource runtime commit annotation differs"
+            )
+        if (
+            labels.get("autoinject-run-kind")
+            != (
+                "cross-pair-policy-warm-"
+                f"{cross_pair_experiment.CAMPAIGN_VERSION}"
+            )
+        ):
+            raise CrossPairJobGenerationError(
+                "Cross-pair resource run-kind label differs"
+            )
+        if (
+            labels.get("autoinject-stage")
+            != cross_pair_experiment.RECORD_STAGE.lower()
+        ):
+            raise CrossPairJobGenerationError(
+                "Cross-pair resource stage label differs"
+            )
+
+    try:
+        task_map_text = config_map["data"][continuation.INDEXED_TASK_KEY]
+        task_document = json.loads(task_map_text)
+    except (KeyError, TypeError, json.JSONDecodeError) as error:
+        raise CrossPairJobGenerationError(
+            f"Cross-pair task ConfigMap is invalid: {error}"
+        ) from error
+    if (
+        not isinstance(task_map_text, str)
+        or hashlib.sha256(task_map_text.encode()).hexdigest()
+        != task_map_sha256
+    ):
+        raise CrossPairJobGenerationError(
+            "Cross-pair task ConfigMap hash disagrees with inventory"
+        )
+
+    records = document.get("records")
+    if (
+        not isinstance(records, list)
+        or len(records) != continuation.INDEXED_COMPLETIONS
+    ):
+        raise CrossPairJobGenerationError(
+            "Cross-pair inventory must contain exactly 32 records"
+        )
+    continuation.validate_task_document(task_document, records)
+    continuation.validate_indexed_job_invariants(
+        indexed_job,
+        expected_config_map_name,
+        task_map_sha256,
+        parallelism,
+    )
+
+    tasks = task_document["tasks"]
+    for index, (record, task) in enumerate(zip(records, tasks)):
+        _validate_spec(record)
+        if record.get("completion_index") != index:
+            raise CrossPairJobGenerationError(
+                f"Cross-pair record {index} has the wrong completion index"
+            )
+        if task.get("pair") != record.get("target"):
+            raise CrossPairJobGenerationError(
+                f"Cross-pair task {index} does not execute its target"
+            )
+        if task.get("env") != expected_cross_pair_environment(record):
+            raise CrossPairJobGenerationError(
+                f"Cross-pair task {index} environment differs from its record"
+            )
+        if record.get("indexed_job_name") != expected_job_name:
+            raise CrossPairJobGenerationError(
+                f"Cross-pair record {index} has the wrong Indexed Job name"
+            )
+        if record.get("task_config_map") != expected_config_map_name:
+            raise CrossPairJobGenerationError(
+                f"Cross-pair record {index} has the wrong task ConfigMap"
+            )
+        if record.get("task_map_sha256") != task_map_sha256:
+            raise CrossPairJobGenerationError(
+                f"Cross-pair record {index} has the wrong task-map hash"
+            )
+
+
+def generate_cross_pair(
+    *,
+    stage_a_inventory: Path = continuation.DEFAULT_STAGE_A_INVENTORY,
+    template_path: Path = continuation.DEFAULT_TEMPLATE,
+    parallelism: int = 8,
+    enforce_runtime_pin: bool = True,
+) -> tuple[
+    str,
+    str,
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
+    """Generate deterministic cross-pair YAML and its bound audit inventory."""
+    if enforce_runtime_pin:
+        continuation.runtime_commit()
+    parallelism = continuation.validate_parallelism(parallelism)
+
+    stage_a_records = continuation.load_stage_a_inventory(stage_a_inventory)
+    specs = cross_pair_experiment.build_cross_pair_specs(stage_a_records)
+    template = continuation.load_behavioral_template(template_path)
+    rendered = [
+        render_cross_pair_job(template, spec)
+        for spec in specs
+    ]
+    resources, indexed_records = package_cross_pair_indexed_resources(
+        [item[0] for item in rendered],
+        [item[1] for item in rendered],
+        parallelism=parallelism,
+    )
+
+    config_map, indexed_job = resources
+    task_map_text = config_map["data"][continuation.INDEXED_TASK_KEY]
+    task_map_sha256 = hashlib.sha256(task_map_text.encode()).hexdigest()
+    payload = cross_pair_job_inventory_payload(
+        indexed_records,
+        template_path,
+        parallelism,
+        indexed_job["metadata"]["name"],
+        config_map["metadata"]["name"],
+        task_map_sha256,
+    )
+    payload_sha256 = hashlib.sha256(
+        (
+            json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+    ).hexdigest()
+    for resource in resources:
+        resource["metadata"].setdefault("annotations", {})[
+            "autoinject.ucr.edu/job-inventory-payload-sha256"
+        ] = payload_sha256
+
+    manifest = continuation.render_yaml(resources)
+    manifest_sha256 = hashlib.sha256(manifest.encode()).hexdigest()
+    inventory = continuation.render_job_inventory(
+        payload,
+        manifest_sha256,
+    )
+    verify_cross_pair_generated_pair(manifest, inventory)
+    return manifest, inventory, resources, indexed_records

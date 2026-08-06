@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 from typing import Any
 
 from scripts import cross_pair_experiment
@@ -269,3 +270,122 @@ def render_cross_pair_job(
         "code_commit": continuation.runtime_commit(),
     }
     return job, audit_record
+
+def cross_pair_indexed_resource_names(
+    task_map_sha256: str | None = None,
+) -> tuple[str, str]:
+    """Return explicit Kubernetes identities for the cross-pair campaign."""
+    job_name = (
+        f"autoinject-cross-pair-{cross_pair_experiment.CAMPAIGN_VERSION}"
+    )
+    suffix = ""
+    if task_map_sha256 is not None:
+        suffix = (
+            "-"
+            + continuation.validate_sha256(
+                task_map_sha256,
+                "cross-pair task-map hash",
+            )[:12]
+        )
+    config_map_name = f"{job_name}-tasks{suffix}"
+
+    for label, value in (
+        ("cross-pair Indexed Job name", job_name),
+        ("cross-pair task ConfigMap name", config_map_name),
+    ):
+        if (
+            continuation.SAFE_COMPONENT.fullmatch(value) is None
+            or len(value) > 63
+        ):
+            raise CrossPairJobGenerationError(
+                f"Unsafe {label}: {value!r}"
+            )
+    return job_name, config_map_name
+
+
+def package_cross_pair_indexed_resources(
+    jobs: list[dict[str, Any]],
+    records: list[dict[str, Any]],
+    parallelism: int = 8,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Package 32 rendered cross-pair Jobs into one immutable Indexed Job."""
+    parallelism = continuation.validate_parallelism(parallelism)
+    resources, indexed_records = continuation.package_indexed_resources(
+        jobs,
+        records,
+        cross_pair_experiment.RECORD_STAGE,
+        parallelism,
+    )
+    if (
+        len(resources) != 2
+        or resources[0].get("kind") != "ConfigMap"
+        or resources[1].get("kind") != "Job"
+    ):
+        raise CrossPairJobGenerationError(
+            "Cross-pair packaging did not produce one ConfigMap and one Job"
+        )
+
+    config_map, indexed_job = resources
+    try:
+        task_map_text = config_map["data"][continuation.INDEXED_TASK_KEY]
+    except (KeyError, TypeError) as error:
+        raise CrossPairJobGenerationError(
+            f"Cross-pair task ConfigMap is incomplete: {error}"
+        ) from error
+    if not isinstance(task_map_text, str):
+        raise CrossPairJobGenerationError(
+            "Cross-pair task map must be UTF-8 JSON text"
+        )
+
+    task_map_sha256 = hashlib.sha256(task_map_text.encode()).hexdigest()
+    indexed_job_name, config_map_name = cross_pair_indexed_resource_names(
+        task_map_sha256
+    )
+    old_config_map_name = config_map.get("metadata", {}).get("name")
+
+    config_map["metadata"]["name"] = config_map_name
+    config_map["metadata"]["labels"]["autoinject-run-kind"] = (
+        f"cross-pair-policy-warm-{cross_pair_experiment.CAMPAIGN_VERSION}"
+    )
+    config_map["metadata"]["labels"]["autoinject-stage"] = (
+        cross_pair_experiment.RECORD_STAGE.lower()
+    )
+
+    indexed_job["metadata"]["name"] = indexed_job_name
+    indexed_job["metadata"]["labels"]["autoinject-run-kind"] = (
+        f"cross-pair-policy-warm-{cross_pair_experiment.CAMPAIGN_VERSION}"
+    )
+    indexed_job["metadata"]["labels"]["autoinject-stage"] = (
+        cross_pair_experiment.RECORD_STAGE.lower()
+    )
+    indexed_job["metadata"]["labels"]["autoinject-suite"] = "multi"
+
+    pod_spec = indexed_job["spec"]["template"]["spec"]
+    task_volumes = [
+        volume
+        for volume in pod_spec.get("volumes", [])
+        if isinstance(volume, dict)
+        and volume.get("name") == continuation.INDEXED_TASK_VOLUME
+    ]
+    if len(task_volumes) != 1:
+        raise CrossPairJobGenerationError(
+            "Cross-pair Indexed Job has invalid task ConfigMap volume wiring"
+        )
+    if task_volumes[0].get("configMap", {}).get("name") != old_config_map_name:
+        raise CrossPairJobGenerationError(
+            "Cross-pair Indexed Job lost the packaged task ConfigMap identity"
+        )
+    task_volumes[0]["configMap"]["name"] = config_map_name
+
+    for record in indexed_records:
+        record["indexed_job_name"] = indexed_job_name
+        record["task_config_map"] = config_map_name
+        record["task_map_sha256"] = task_map_sha256
+
+    continuation.validate_indexed_job_invariants(
+        indexed_job,
+        config_map_name,
+        task_map_sha256,
+        parallelism,
+    )
+    return resources, indexed_records

@@ -1,4 +1,6 @@
 import copy
+import hashlib
+import json
 import unittest
 
 from scripts import cross_pair_experiment
@@ -174,6 +176,183 @@ class CrossPairJobGeneratorTests(unittest.TestCase):
         ):
             generate_cross_pair_jobs.expected_cross_pair_environment(spec)
 
+
+    def test_packages_one_immutable_config_map_and_one_indexed_job(self):
+        rendered = [
+            generate_cross_pair_jobs.render_cross_pair_job(
+                self.template,
+                spec,
+            )
+            for spec in self.specs
+        ]
+        resources, indexed_records = (
+            generate_cross_pair_jobs.package_cross_pair_indexed_resources(
+                [item[0] for item in rendered],
+                [item[1] for item in rendered],
+                parallelism=8,
+            )
+        )
+        config_map, indexed_job = resources
+
+        self.assertEqual(
+            [resource["kind"] for resource in resources],
+            ["ConfigMap", "Job"],
+        )
+        self.assertTrue(config_map["immutable"])
+        self.assertEqual(len(indexed_records), 32)
+        self.assertEqual(indexed_job["spec"]["completionMode"], "Indexed")
+        self.assertEqual(indexed_job["spec"]["completions"], 32)
+        self.assertEqual(indexed_job["spec"]["parallelism"], 8)
+        self.assertEqual(indexed_job["spec"]["backoffLimitPerIndex"], 0)
+        self.assertEqual(indexed_job["spec"]["maxFailedIndexes"], 32)
+        self.assertEqual(
+            indexed_job["spec"]["template"]["spec"]["activeDeadlineSeconds"],
+            continuation.INDEXED_POD_DEADLINE_SECONDS,
+        )
+
+    def test_index_zero_keeps_source_checkpoint_and_target_task(self):
+        rendered = [
+            generate_cross_pair_jobs.render_cross_pair_job(
+                self.template,
+                spec,
+            )
+            for spec in self.specs
+        ]
+        resources, indexed_records = (
+            generate_cross_pair_jobs.package_cross_pair_indexed_resources(
+                [item[0] for item in rendered],
+                [item[1] for item in rendered],
+                parallelism=8,
+            )
+        )
+        task_document = json.loads(
+            resources[0]["data"][continuation.INDEXED_TASK_KEY]
+        )
+        task = task_document["tasks"][0]
+        spec = self.specs[0]
+        record = indexed_records[0]
+
+        self.assertEqual(task["completion_index"], 0)
+        self.assertEqual(task["pair"], spec["target"])
+        self.assertEqual(
+            task["env"]["AI_SOURCE_CHECKPOINT"],
+            spec["source_checkpoint_path"],
+        )
+        self.assertEqual(
+            task["env"]["AI_SOURCE_SHA256"],
+            spec["source_checkpoint_sha256"],
+        )
+        self.assertEqual(
+            task["env"]["AI_USER_TASK"],
+            spec["target"]["user_task"],
+        )
+        self.assertNotEqual(
+            task["env"]["AI_USER_TASK"],
+            spec["source"]["user_task"],
+        )
+        self.assertEqual(record["target"], spec["target"])
+        self.assertEqual(record["source"], spec["source"])
+
+    def test_indexed_resources_use_cross_pair_names_and_labels(self):
+        rendered = [
+            generate_cross_pair_jobs.render_cross_pair_job(
+                self.template,
+                spec,
+            )
+            for spec in self.specs
+        ]
+        resources, indexed_records = (
+            generate_cross_pair_jobs.package_cross_pair_indexed_resources(
+                [item[0] for item in rendered],
+                [item[1] for item in rendered],
+                parallelism=8,
+            )
+        )
+        config_map, indexed_job = resources
+        task_map_text = config_map["data"][continuation.INDEXED_TASK_KEY]
+        task_map_sha256 = hashlib.sha256(task_map_text.encode()).hexdigest()
+        expected_job, expected_config_map = (
+            generate_cross_pair_jobs.cross_pair_indexed_resource_names(
+                task_map_sha256
+            )
+        )
+
+        self.assertEqual(indexed_job["metadata"]["name"], expected_job)
+        self.assertEqual(config_map["metadata"]["name"], expected_config_map)
+        self.assertTrue(expected_config_map.endswith(task_map_sha256[:12]))
+
+        for resource in resources:
+            labels = resource["metadata"]["labels"]
+            self.assertEqual(
+                labels["autoinject-run-kind"],
+                "cross-pair-policy-warm-v1",
+            )
+            self.assertEqual(labels["autoinject-stage"], "x")
+            self.assertNotIn(
+                "continuation-stage-x",
+                labels["autoinject-run-kind"],
+            )
+
+        self.assertEqual(
+            indexed_job["metadata"]["labels"]["autoinject-suite"],
+            "multi",
+        )
+        self.assertTrue(
+            all(
+                record["indexed_job_name"] == expected_job
+                and record["task_config_map"] == expected_config_map
+                and record["task_map_sha256"] == task_map_sha256
+                for record in indexed_records
+            )
+        )
+
+    def test_all_indexed_records_execute_targets_with_named_sources(self):
+        rendered = [
+            generate_cross_pair_jobs.render_cross_pair_job(
+                self.template,
+                spec,
+            )
+            for spec in self.specs
+        ]
+        resources, indexed_records = (
+            generate_cross_pair_jobs.package_cross_pair_indexed_resources(
+                [item[0] for item in rendered],
+                [item[1] for item in rendered],
+                parallelism=8,
+            )
+        )
+        task_document = json.loads(
+            resources[0]["data"][continuation.INDEXED_TASK_KEY]
+        )
+
+        self.assertEqual(
+            [record["completion_index"] for record in indexed_records],
+            list(range(32)),
+        )
+        for spec, record, task in zip(
+            self.specs,
+            indexed_records,
+            task_document["tasks"],
+        ):
+            self.assertEqual(task["pair"], spec["target"])
+            self.assertEqual(record["target"], spec["target"])
+            self.assertEqual(record["source"], spec["source"])
+            self.assertEqual(
+                task["env"]["AI_SOURCE_CHECKPOINT"],
+                spec["source_checkpoint_path"],
+            )
+            self.assertEqual(
+                (
+                    record["suite"],
+                    record["user_task"],
+                    record["injection_task"],
+                ),
+                (
+                    spec["target"]["suite"],
+                    spec["target"]["user_task"],
+                    spec["target"]["injection_task"],
+                ),
+            )
 
 if __name__ == "__main__":
     unittest.main()

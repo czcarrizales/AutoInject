@@ -1,0 +1,1288 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoinject-stage-b-v1-tasks-4827a5805dd8
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: autoinject-qwen3-small
+    autoinject-run-kind: continuation-stage-b-v1
+    autoinject-stage: b
+  annotations:
+    autoinject.ucr.edu/code-commit: 66f4e040e891926bd493b5466d501d11b3f7fa96
+    autoinject.ucr.edu/task-map-sha256: 4827a5805dd8a3ebb3848ad312b02cd3a91ed42f870188087269a2db7c9c839e
+    autoinject.ucr.edu/job-inventory-payload-sha256: 8460f416573f29cc581768998390a181f1bd532a2b254b4040161049aa7357b0
+immutable: true
+data:
+  tasks.json: |
+    {
+      "schema_version": 1,
+      "task_count": 32,
+      "tasks": [
+        {
+          "completion_index": 0,
+          "env": {
+            "AI_CHAIN_ID": "workspace-u38-i10-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "d49526134103d59e491316a7d9e65b701cad901335f6c7eca3eee8cfa8dfd39d",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-workspace-u38-i10-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_10",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/workspace-u38-i10-chain-001/stage-b/workspace-u38-i10-chain-001-stage-b-v1",
+            "AI_RUN_ID": "workspace-u38-i10-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i10-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "1fb761a477fb0dedb66f1f847f9a1bbd99e02d4af2023cf199af00230fc12e6e",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i10-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "8872878823e3bdbcc94d8cd9f6b7fc89220d3ff1dbe493790b792b00eb7972ad",
+            "AI_SOURCE_STATE_SIZE": "2675",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/workspace-u38-i10-chain-001--stage-B--workspace-u38-i10-chain-001-stage-b-v1.json",
+            "AI_SUITE": "workspace",
+            "AI_USER_TASK": "user_task_38"
+          },
+          "pair": {
+            "injection_task": "injection_task_10",
+            "suite": "workspace",
+            "user_task": "user_task_38"
+          }
+        },
+        {
+          "completion_index": 1,
+          "env": {
+            "AI_CHAIN_ID": "workspace-u38-i11-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "dada66f2d395df8da7a1be6fc9572e4b660d0c503674396982816bb404e3c72d",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-workspace-u38-i11-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_11",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/workspace-u38-i11-chain-001/stage-b/workspace-u38-i11-chain-001-stage-b-v1",
+            "AI_RUN_ID": "workspace-u38-i11-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i11-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "cb37b05a4a2e49a3f6e74f65e8ac7ad375f0421f1a158c06ddd1111311ec3171",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i11-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "a63fc6ae09dad2ae8ecea61001f5d65225e80f0e890ce4b582823d6b31d32dfb",
+            "AI_SOURCE_STATE_SIZE": "2656",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/workspace-u38-i11-chain-001--stage-B--workspace-u38-i11-chain-001-stage-b-v1.json",
+            "AI_SUITE": "workspace",
+            "AI_USER_TASK": "user_task_38"
+          },
+          "pair": {
+            "injection_task": "injection_task_11",
+            "suite": "workspace",
+            "user_task": "user_task_38"
+          }
+        },
+        {
+          "completion_index": 2,
+          "env": {
+            "AI_CHAIN_ID": "workspace-u38-i12-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "f3e14f5af1842426cf1f1a0da56f7b73d2db3309a8a4d127da068a57cba40c52",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-workspace-u38-i12-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_12",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/workspace-u38-i12-chain-001/stage-b/workspace-u38-i12-chain-001-stage-b-v1",
+            "AI_RUN_ID": "workspace-u38-i12-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i12-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "b15e2f5dfc70030dfec6d78c327c5918213802b7ed9a3213e0dc36875df0f264",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i12-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "419c1794e533627a6bd795a6c41f4b0ef613fd12b9a2a3b818f87d4635ff9edb",
+            "AI_SOURCE_STATE_SIZE": "2656",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/workspace-u38-i12-chain-001--stage-B--workspace-u38-i12-chain-001-stage-b-v1.json",
+            "AI_SUITE": "workspace",
+            "AI_USER_TASK": "user_task_38"
+          },
+          "pair": {
+            "injection_task": "injection_task_12",
+            "suite": "workspace",
+            "user_task": "user_task_38"
+          }
+        },
+        {
+          "completion_index": 3,
+          "env": {
+            "AI_CHAIN_ID": "workspace-u38-i13-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "b32d5cdecac322e809c924207be58822bd5e17c3c6d4dc58e5416e4bf20f67cd",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-workspace-u38-i13-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_13",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/workspace-u38-i13-chain-001/stage-b/workspace-u38-i13-chain-001-stage-b-v1",
+            "AI_RUN_ID": "workspace-u38-i13-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i13-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "b67e1163ec2b7bde1dcf936ae154843b92405a1a0a8c6b037d20059f224df079",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u38-i13-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "c6e6ae39d101a1b54ff29ceb3b3773ec7f8fb192945fbe1e3ecc23c93c0ab1f7",
+            "AI_SOURCE_STATE_SIZE": "2691",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/workspace-u38-i13-chain-001--stage-B--workspace-u38-i13-chain-001-stage-b-v1.json",
+            "AI_SUITE": "workspace",
+            "AI_USER_TASK": "user_task_38"
+          },
+          "pair": {
+            "injection_task": "injection_task_13",
+            "suite": "workspace",
+            "user_task": "user_task_38"
+          }
+        },
+        {
+          "completion_index": 4,
+          "env": {
+            "AI_CHAIN_ID": "workspace-u39-i10-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "de8ba2d47d00f3b6ebaa8322ceea09eff371f01595c6c3f9cf2798a11387ef2f",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-workspace-u39-i10-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_10",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/workspace-u39-i10-chain-001/stage-b/workspace-u39-i10-chain-001-stage-b-v1",
+            "AI_RUN_ID": "workspace-u39-i10-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i10-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "046c2fec5fa541041bdcec7105d3decf88a347d261d1e6629b7eaaac6e9a1105",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i10-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "96831a8b48a00101f50727aa5b7c9fc89e4e4d653b0aa55620f32e85694904e1",
+            "AI_SOURCE_STATE_SIZE": "2759",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/workspace-u39-i10-chain-001--stage-B--workspace-u39-i10-chain-001-stage-b-v1.json",
+            "AI_SUITE": "workspace",
+            "AI_USER_TASK": "user_task_39"
+          },
+          "pair": {
+            "injection_task": "injection_task_10",
+            "suite": "workspace",
+            "user_task": "user_task_39"
+          }
+        },
+        {
+          "completion_index": 5,
+          "env": {
+            "AI_CHAIN_ID": "workspace-u39-i11-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "7301a962152820eebc2e5f04c80348ee16464d09cf4f41fe97349c8463630294",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-workspace-u39-i11-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_11",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/workspace-u39-i11-chain-001/stage-b/workspace-u39-i11-chain-001-stage-b-v1",
+            "AI_RUN_ID": "workspace-u39-i11-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i11-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "f1635690a4c0600036d4ac81e3eb90f4bf6e1ad37f2fa080ac5fc5e2ba4a87da",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i11-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "27f18d8ab5d1ab08dc6704ce30a53f1367a22ad7fe920528d71573c9de41d13d",
+            "AI_SOURCE_STATE_SIZE": "2745",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/workspace-u39-i11-chain-001--stage-B--workspace-u39-i11-chain-001-stage-b-v1.json",
+            "AI_SUITE": "workspace",
+            "AI_USER_TASK": "user_task_39"
+          },
+          "pair": {
+            "injection_task": "injection_task_11",
+            "suite": "workspace",
+            "user_task": "user_task_39"
+          }
+        },
+        {
+          "completion_index": 6,
+          "env": {
+            "AI_CHAIN_ID": "workspace-u39-i12-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "7c558258223aee3c8f9158e542715557d7599ecf7c16522b2285d7dd6bf70c99",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-workspace-u39-i12-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_12",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/workspace-u39-i12-chain-001/stage-b/workspace-u39-i12-chain-001-stage-b-v1",
+            "AI_RUN_ID": "workspace-u39-i12-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i12-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "41002da973aeae9cdc506acd4e7990121a23aa3145350f13b379bc7a8b58705e",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/workspace-u39-i12-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "f386bd62d52d11604a9e30814bd36b65708f8cbadacd4460810cff3dcee90c5f",
+            "AI_SOURCE_STATE_SIZE": "2716",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/workspace-u39-i12-chain-001--stage-B--workspace-u39-i12-chain-001-stage-b-v1.json",
+            "AI_SUITE": "workspace",
+            "AI_USER_TASK": "user_task_39"
+          },
+          "pair": {
+            "injection_task": "injection_task_12",
+            "suite": "workspace",
+            "user_task": "user_task_39"
+          }
+        },
+        {
+          "completion_index": 7,
+          "env": {
+            "AI_CHAIN_ID": "workspace-u39-i13-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "12fe7afecbd8103a57ec64d9a4226822382a3290201e2c4b0b62e6387c878f00",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-workspace-u39-i13-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_13",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/workspace-u39-i13-chain-001/stage-b/workspace-u39-i13-chain-001-stage-b-v1",
+            "AI_RUN_ID": "workspace-u39-i13-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/retry-failed2-attempt-03/workspace-u39-i13-attempt-03/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "6e58252fc3c84f82a37b7016008b87248e2590137a17beedb3ed8b6ea9659834",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/retry-failed2-attempt-03/workspace-u39-i13-attempt-03/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "8d0a9e080a3afbe51fadb2491964778958396e7683a4727710cc6f3aa627e92c",
+            "AI_SOURCE_STATE_SIZE": "2643",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/workspace-u39-i13-chain-001--stage-B--workspace-u39-i13-chain-001-stage-b-v1.json",
+            "AI_SUITE": "workspace",
+            "AI_USER_TASK": "user_task_39"
+          },
+          "pair": {
+            "injection_task": "injection_task_13",
+            "suite": "workspace",
+            "user_task": "user_task_39"
+          }
+        },
+        {
+          "completion_index": 8,
+          "env": {
+            "AI_CHAIN_ID": "banking-u14-i5-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "3e1935260a047835e0a2f99df978714e0b74851857c6d2a7cb12d8ea012401d6",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-banking-u14-i5-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_5",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/banking-u14-i5-chain-001/stage-b/banking-u14-i5-chain-001-stage-b-v1",
+            "AI_RUN_ID": "banking-u14-i5-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i5-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "ed798f3c9c97a1d05ac165a17d4734a69b5ece529ab46c3ca9a0dcebd6ae7e46",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i5-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "e185c4bdd5a3d997535a337b5c565d00c647f1b2797f8250cf9d9bfb5fbd5065",
+            "AI_SOURCE_STATE_SIZE": "2707",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/banking-u14-i5-chain-001--stage-B--banking-u14-i5-chain-001-stage-b-v1.json",
+            "AI_SUITE": "banking",
+            "AI_USER_TASK": "user_task_14"
+          },
+          "pair": {
+            "injection_task": "injection_task_5",
+            "suite": "banking",
+            "user_task": "user_task_14"
+          }
+        },
+        {
+          "completion_index": 9,
+          "env": {
+            "AI_CHAIN_ID": "banking-u14-i6-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "a445eab9f877aa43f40be95b6a2a72701f4b4d59cf10a50c8a32b6d97a07a0ec",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-banking-u14-i6-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_6",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/banking-u14-i6-chain-001/stage-b/banking-u14-i6-chain-001-stage-b-v1",
+            "AI_RUN_ID": "banking-u14-i6-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i6-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "66d592909b28912a5e1b4640ac5d355b840279fd0f3602872b1a8f3489f0040b",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i6-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "f770e3ce097525942a20889f53da5112a1ce79db60c9c5ad9afd2f70ad84b7a1",
+            "AI_SOURCE_STATE_SIZE": "2713",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/banking-u14-i6-chain-001--stage-B--banking-u14-i6-chain-001-stage-b-v1.json",
+            "AI_SUITE": "banking",
+            "AI_USER_TASK": "user_task_14"
+          },
+          "pair": {
+            "injection_task": "injection_task_6",
+            "suite": "banking",
+            "user_task": "user_task_14"
+          }
+        },
+        {
+          "completion_index": 10,
+          "env": {
+            "AI_CHAIN_ID": "banking-u14-i7-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "7b3a929092d8ce814c2b26480bb2901426c32573c34a66013c755220da0966ee",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-banking-u14-i7-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_7",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/banking-u14-i7-chain-001/stage-b/banking-u14-i7-chain-001-stage-b-v1",
+            "AI_RUN_ID": "banking-u14-i7-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i7-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "65",
+            "AI_SOURCE_SHA256": "d9d9e3de3c6b8dbacf283c8f4312947f15df12cc16323dc03ab972e6ab54ed19",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "65",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i7-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "fd8c4c719900fd8ab1f255d515ccba018b3a759a5f7653a87406ad05c5f1afed",
+            "AI_SOURCE_STATE_SIZE": "1533",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/banking-u14-i7-chain-001--stage-B--banking-u14-i7-chain-001-stage-b-v1.json",
+            "AI_SUITE": "banking",
+            "AI_USER_TASK": "user_task_14"
+          },
+          "pair": {
+            "injection_task": "injection_task_7",
+            "suite": "banking",
+            "user_task": "user_task_14"
+          }
+        },
+        {
+          "completion_index": 11,
+          "env": {
+            "AI_CHAIN_ID": "banking-u14-i8-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "a3dbaf20be7ef62e2ecb8d58c0651d190f005209741e11aeaca604b65349fbd1",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-banking-u14-i8-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_8",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/banking-u14-i8-chain-001/stage-b/banking-u14-i8-chain-001-stage-b-v1",
+            "AI_RUN_ID": "banking-u14-i8-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i8-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "5b3278fddf9ab40518d42df77d2c9a49242a740cdc285d3d5821a004cf302db3",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u14-i8-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "262874190bf8dfb68697963f3bacd2a050132f1fb4c0f7a0ebe65b7b9c9a1767",
+            "AI_SOURCE_STATE_SIZE": "2737",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/banking-u14-i8-chain-001--stage-B--banking-u14-i8-chain-001-stage-b-v1.json",
+            "AI_SUITE": "banking",
+            "AI_USER_TASK": "user_task_14"
+          },
+          "pair": {
+            "injection_task": "injection_task_8",
+            "suite": "banking",
+            "user_task": "user_task_14"
+          }
+        },
+        {
+          "completion_index": 12,
+          "env": {
+            "AI_CHAIN_ID": "banking-u15-i5-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "8cab517e7297824e716b4c97396777de9e4991441b3d363eb620ec5e08f07dad",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-banking-u15-i5-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_5",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/banking-u15-i5-chain-001/stage-b/banking-u15-i5-chain-001-stage-b-v1",
+            "AI_RUN_ID": "banking-u15-i5-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i5-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "f5badd719216f3b1936fd7412dc9fea5b44f7a6414c20aad6ec02ffa95824757",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i5-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "3b6947575119bb839a1ec91ee6795231a87f4587fea89c92dbe6976459b1acd9",
+            "AI_SOURCE_STATE_SIZE": "2750",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/banking-u15-i5-chain-001--stage-B--banking-u15-i5-chain-001-stage-b-v1.json",
+            "AI_SUITE": "banking",
+            "AI_USER_TASK": "user_task_15"
+          },
+          "pair": {
+            "injection_task": "injection_task_5",
+            "suite": "banking",
+            "user_task": "user_task_15"
+          }
+        },
+        {
+          "completion_index": 13,
+          "env": {
+            "AI_CHAIN_ID": "banking-u15-i6-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "6d8a2c702bd6a7136f303be27f44010828464b4d4061d7f29f3b9bb2efdb31cb",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-banking-u15-i6-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_6",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/banking-u15-i6-chain-001/stage-b/banking-u15-i6-chain-001-stage-b-v1",
+            "AI_RUN_ID": "banking-u15-i6-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i6-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "67a9809e1b88995d4b92a7da961b1dfd09679c47616d42589ae50d191caec241",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i6-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "05a471824ce34c556e102a2acad3f24fb2fb8dcad9995ecee3bb541ed99d04b3",
+            "AI_SOURCE_STATE_SIZE": "2781",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/banking-u15-i6-chain-001--stage-B--banking-u15-i6-chain-001-stage-b-v1.json",
+            "AI_SUITE": "banking",
+            "AI_USER_TASK": "user_task_15"
+          },
+          "pair": {
+            "injection_task": "injection_task_6",
+            "suite": "banking",
+            "user_task": "user_task_15"
+          }
+        },
+        {
+          "completion_index": 14,
+          "env": {
+            "AI_CHAIN_ID": "banking-u15-i7-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "8111fd327bc9b85bb2760dacd886a489cd32d627c7247ac1433e8c6561ee4b0f",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-banking-u15-i7-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_7",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/banking-u15-i7-chain-001/stage-b/banking-u15-i7-chain-001-stage-b-v1",
+            "AI_RUN_ID": "banking-u15-i7-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/retry-failed2-attempt-03/banking-u15-i7-attempt-03/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "883667732fa47950c5af736bd3804a9664d44317387a4fdd10d5dedd87fbdb25",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/retry-failed2-attempt-03/banking-u15-i7-attempt-03/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "28672339e7da3967c9463ea67d4f1b4ce08c2da4f7f07033d77e5297f0636097",
+            "AI_SOURCE_STATE_SIZE": "2716",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/banking-u15-i7-chain-001--stage-B--banking-u15-i7-chain-001-stage-b-v1.json",
+            "AI_SUITE": "banking",
+            "AI_USER_TASK": "user_task_15"
+          },
+          "pair": {
+            "injection_task": "injection_task_7",
+            "suite": "banking",
+            "user_task": "user_task_15"
+          }
+        },
+        {
+          "completion_index": 15,
+          "env": {
+            "AI_CHAIN_ID": "banking-u15-i8-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "bf675607e29605d8ab13020a7e48093d05ac19a4d3f68c13a1bdf8e4db39f9ed",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-banking-u15-i8-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_8",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/banking-u15-i8-chain-001/stage-b/banking-u15-i8-chain-001-stage-b-v1",
+            "AI_RUN_ID": "banking-u15-i8-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i8-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "7493e962073b3663f677c4f4405f75c4782abac440e4ac4a42660a8a57287815",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/banking-u15-i8-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "37c92dcbbc2083a1faad2aeaa0cbb9fa02945a043babe3f008e77b81ea5e15f6",
+            "AI_SOURCE_STATE_SIZE": "2763",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/banking-u15-i8-chain-001--stage-B--banking-u15-i8-chain-001-stage-b-v1.json",
+            "AI_SUITE": "banking",
+            "AI_USER_TASK": "user_task_15"
+          },
+          "pair": {
+            "injection_task": "injection_task_8",
+            "suite": "banking",
+            "user_task": "user_task_15"
+          }
+        },
+        {
+          "completion_index": 16,
+          "env": {
+            "AI_CHAIN_ID": "travel-u18-i3-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "500d2b319ac49ea57164b40b4c97f2b011a0bec357ccb460a58d098df0b0c61c",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-travel-u18-i3-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_3",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/travel-u18-i3-chain-001/stage-b/travel-u18-i3-chain-001-stage-b-v1",
+            "AI_RUN_ID": "travel-u18-i3-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/travel-u18-i3-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "0ff9ee23459497bfe1b4bcfdfab96d47564eef32406fdc359e8a472e364dafd4",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/travel-u18-i3-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "42d0df25c5c59d4161e7672d4d58f4ed5128dea36c78ff8c005559117aaf4fb9",
+            "AI_SOURCE_STATE_SIZE": "2645",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/travel-u18-i3-chain-001--stage-B--travel-u18-i3-chain-001-stage-b-v1.json",
+            "AI_SUITE": "travel",
+            "AI_USER_TASK": "user_task_18"
+          },
+          "pair": {
+            "injection_task": "injection_task_3",
+            "suite": "travel",
+            "user_task": "user_task_18"
+          }
+        },
+        {
+          "completion_index": 17,
+          "env": {
+            "AI_CHAIN_ID": "travel-u18-i4-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "65180992528719760bd14ccad9e05e64530f1b9bee42852430fb394e87d8191c",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-travel-u18-i4-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_4",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/travel-u18-i4-chain-001/stage-b/travel-u18-i4-chain-001-stage-b-v1",
+            "AI_RUN_ID": "travel-u18-i4-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i4-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "1c2bd1154ea49c81311e62d020f727ca84af10a7cbb1f8974722fe2fb9393d88",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i4-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "2dccd1614720ceb94f316c8a70b10fcb1dbd9c191496cff3c7202266e7932e01",
+            "AI_SOURCE_STATE_SIZE": "2677",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/travel-u18-i4-chain-001--stage-B--travel-u18-i4-chain-001-stage-b-v1.json",
+            "AI_SUITE": "travel",
+            "AI_USER_TASK": "user_task_18"
+          },
+          "pair": {
+            "injection_task": "injection_task_4",
+            "suite": "travel",
+            "user_task": "user_task_18"
+          }
+        },
+        {
+          "completion_index": 18,
+          "env": {
+            "AI_CHAIN_ID": "travel-u18-i5-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "f2cb1b5a97d25f5273d26a56cb2ec13dd094c1b811215ba7ac16d0a2bc400e4c",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-travel-u18-i5-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_5",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/travel-u18-i5-chain-001/stage-b/travel-u18-i5-chain-001-stage-b-v1",
+            "AI_RUN_ID": "travel-u18-i5-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i5-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "a6356ac64663c1b1d7c570bd0ae1557d16968a8d7541fa91ef865b90a94b04f6",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i5-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "5e62c4de392706b8325911092a4fcdd92009fa50ca723e9f75aa5e5aa3e94024",
+            "AI_SOURCE_STATE_SIZE": "2677",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/travel-u18-i5-chain-001--stage-B--travel-u18-i5-chain-001-stage-b-v1.json",
+            "AI_SUITE": "travel",
+            "AI_USER_TASK": "user_task_18"
+          },
+          "pair": {
+            "injection_task": "injection_task_5",
+            "suite": "travel",
+            "user_task": "user_task_18"
+          }
+        },
+        {
+          "completion_index": 19,
+          "env": {
+            "AI_CHAIN_ID": "travel-u18-i6-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "5028521af0dc9c3f142bbd51f67b1193686fb45f8e00ae5e237e552c24c79378",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-travel-u18-i6-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_6",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/travel-u18-i6-chain-001/stage-b/travel-u18-i6-chain-001-stage-b-v1",
+            "AI_RUN_ID": "travel-u18-i6-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i6-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "4aba9c7bf8f0fd96e6f74506f6e9c954a35323835964dd4c01bfa91d2eea1cbf",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u18-i6-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "ede6016bdb4d5998218b84403a2ae0c4fb6f2f990dd6d7786ad54bd62bc7f925",
+            "AI_SOURCE_STATE_SIZE": "2690",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/travel-u18-i6-chain-001--stage-B--travel-u18-i6-chain-001-stage-b-v1.json",
+            "AI_SUITE": "travel",
+            "AI_USER_TASK": "user_task_18"
+          },
+          "pair": {
+            "injection_task": "injection_task_6",
+            "suite": "travel",
+            "user_task": "user_task_18"
+          }
+        },
+        {
+          "completion_index": 20,
+          "env": {
+            "AI_CHAIN_ID": "travel-u19-i3-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "68b2b1156396689e7563acb44f177ec774f3e46287e5b0d8b148899203ea5c00",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-travel-u19-i3-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_3",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/travel-u19-i3-chain-001/stage-b/travel-u19-i3-chain-001-stage-b-v1",
+            "AI_RUN_ID": "travel-u19-i3-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i3-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "7b7e8b1a1603e1f9b5bec4c58ce6735404ad9a57e7c242aad0e5bf4f29910c4e",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i3-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "0bb5fe2835b6621fa4d0d7ad610c9aaa1535b4b6cf83e6f30cc5eec521c48487",
+            "AI_SOURCE_STATE_SIZE": "2712",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/travel-u19-i3-chain-001--stage-B--travel-u19-i3-chain-001-stage-b-v1.json",
+            "AI_SUITE": "travel",
+            "AI_USER_TASK": "user_task_19"
+          },
+          "pair": {
+            "injection_task": "injection_task_3",
+            "suite": "travel",
+            "user_task": "user_task_19"
+          }
+        },
+        {
+          "completion_index": 21,
+          "env": {
+            "AI_CHAIN_ID": "travel-u19-i4-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "ba5c9fb4c9f6bd832b92c685270358f3bd03feb92316e25985b67df51ebb4739",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-travel-u19-i4-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_4",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/travel-u19-i4-chain-001/stage-b/travel-u19-i4-chain-001-stage-b-v1",
+            "AI_RUN_ID": "travel-u19-i4-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i4-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "32fb8897c7292c5b3475222c20d51525e3f92ec267c529471248aebcca15c5e7",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i4-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "ebfa12ee442170c22cae547ba16eae399223930a8021f30e97c752623b688ddb",
+            "AI_SOURCE_STATE_SIZE": "2677",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/travel-u19-i4-chain-001--stage-B--travel-u19-i4-chain-001-stage-b-v1.json",
+            "AI_SUITE": "travel",
+            "AI_USER_TASK": "user_task_19"
+          },
+          "pair": {
+            "injection_task": "injection_task_4",
+            "suite": "travel",
+            "user_task": "user_task_19"
+          }
+        },
+        {
+          "completion_index": 22,
+          "env": {
+            "AI_CHAIN_ID": "travel-u19-i5-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "31f2cfeb6fd2613e0a07a45a314fdf1a5311a04f37835bd396e1acd085704d20",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-travel-u19-i5-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_5",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/travel-u19-i5-chain-001/stage-b/travel-u19-i5-chain-001-stage-b-v1",
+            "AI_RUN_ID": "travel-u19-i5-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i5-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "b5fbf2a24ca23aed07b45fd0991b50a81e0abc34a6202760b73888a02af1a746",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i5-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "2890d77d490f1957a500c99cd8d690700ace35f3df1e8e806007b5138d949887",
+            "AI_SOURCE_STATE_SIZE": "2677",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/travel-u19-i5-chain-001--stage-B--travel-u19-i5-chain-001-stage-b-v1.json",
+            "AI_SUITE": "travel",
+            "AI_USER_TASK": "user_task_19"
+          },
+          "pair": {
+            "injection_task": "injection_task_5",
+            "suite": "travel",
+            "user_task": "user_task_19"
+          }
+        },
+        {
+          "completion_index": 23,
+          "env": {
+            "AI_CHAIN_ID": "travel-u19-i6-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "bb52ceb1adf8bd4f8f002c27cbbec12b803fd4e6878bf676d78af61c645bbbf7",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-travel-u19-i6-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_6",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/travel-u19-i6-chain-001/stage-b/travel-u19-i6-chain-001-stage-b-v1",
+            "AI_RUN_ID": "travel-u19-i6-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i6-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "3a25e94d54119c1cf7c883526b7de49ee35b2fe04a73132c9d92e71f67bc19ef",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/travel-u19-i6-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "41a0145c5eff9d15f04098e47428d181b4f62378300d4a3f07f44a0b2438fb07",
+            "AI_SOURCE_STATE_SIZE": "2677",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/travel-u19-i6-chain-001--stage-B--travel-u19-i6-chain-001-stage-b-v1.json",
+            "AI_SUITE": "travel",
+            "AI_USER_TASK": "user_task_19"
+          },
+          "pair": {
+            "injection_task": "injection_task_6",
+            "suite": "travel",
+            "user_task": "user_task_19"
+          }
+        },
+        {
+          "completion_index": 24,
+          "env": {
+            "AI_CHAIN_ID": "slack-u19-i2-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "e963553a08ac03df157298f046294d27d222398e7b1a61a86f447bbb64f6dc1a",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-slack-u19-i2-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_2",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/slack-u19-i2-chain-001/stage-b/slack-u19-i2-chain-001-stage-b-v1",
+            "AI_RUN_ID": "slack-u19-i2-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i2-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "8f01663a3cfc9155bcfa22bf5c70b1fc2a7b0413634404d169bd0ca745f8d977",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i2-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "a248a0d54dee5f5ad945579805bfdf86020e34cc8b2dce69f559fdce641772a3",
+            "AI_SOURCE_STATE_SIZE": "2676",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/slack-u19-i2-chain-001--stage-B--slack-u19-i2-chain-001-stage-b-v1.json",
+            "AI_SUITE": "slack",
+            "AI_USER_TASK": "user_task_19"
+          },
+          "pair": {
+            "injection_task": "injection_task_2",
+            "suite": "slack",
+            "user_task": "user_task_19"
+          }
+        },
+        {
+          "completion_index": 25,
+          "env": {
+            "AI_CHAIN_ID": "slack-u19-i3-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "29385b58713f72b9cc658a5cea63a3415435f179f81321ea9bfe1cacc4c78eb9",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-slack-u19-i3-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_3",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/slack-u19-i3-chain-001/stage-b/slack-u19-i3-chain-001-stage-b-v1",
+            "AI_RUN_ID": "slack-u19-i3-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i3-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "ff0999be28a7937898266712287f595155574f82f5598c310161ab828e902702",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i3-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "8396b801693c92516d80601b639ce4e7d142013c9aa965d73ab01a3184a88c04",
+            "AI_SOURCE_STATE_SIZE": "2746",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/slack-u19-i3-chain-001--stage-B--slack-u19-i3-chain-001-stage-b-v1.json",
+            "AI_SUITE": "slack",
+            "AI_USER_TASK": "user_task_19"
+          },
+          "pair": {
+            "injection_task": "injection_task_3",
+            "suite": "slack",
+            "user_task": "user_task_19"
+          }
+        },
+        {
+          "completion_index": 26,
+          "env": {
+            "AI_CHAIN_ID": "slack-u19-i4-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "7f0189a1e93f2010b9220a9f0bc80e64efa5dea42e6f2456ed5fc84bd674ebe9",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-slack-u19-i4-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_4",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/slack-u19-i4-chain-001/stage-b/slack-u19-i4-chain-001-stage-b-v1",
+            "AI_RUN_ID": "slack-u19-i4-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i4-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "7a45914a45de2d8f3aeb035f46a7e2a528b0c9dd572e07c74d9652b28c87bbdf",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i4-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "9f3cc94966a6e3d37cc6a22825413e00dbe91e619debe9978ba93a16ee992dc6",
+            "AI_SOURCE_STATE_SIZE": "2676",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/slack-u19-i4-chain-001--stage-B--slack-u19-i4-chain-001-stage-b-v1.json",
+            "AI_SUITE": "slack",
+            "AI_USER_TASK": "user_task_19"
+          },
+          "pair": {
+            "injection_task": "injection_task_4",
+            "suite": "slack",
+            "user_task": "user_task_19"
+          }
+        },
+        {
+          "completion_index": 27,
+          "env": {
+            "AI_CHAIN_ID": "slack-u19-i5-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "30870923fc0447a4464de44a044b16baa7885600c0344705836444bf47d58d4f",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-slack-u19-i5-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_5",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/slack-u19-i5-chain-001/stage-b/slack-u19-i5-chain-001-stage-b-v1",
+            "AI_RUN_ID": "slack-u19-i5-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i5-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "b1f1a3c831951c993a84e678e2c39de0f77ba881cbac33876abec840410e4849",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u19-i5-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "78517b19b14fc1d9c8745db15fd8b751a5467afbdae38473e8b6e5f709f26a62",
+            "AI_SOURCE_STATE_SIZE": "2690",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/slack-u19-i5-chain-001--stage-B--slack-u19-i5-chain-001-stage-b-v1.json",
+            "AI_SUITE": "slack",
+            "AI_USER_TASK": "user_task_19"
+          },
+          "pair": {
+            "injection_task": "injection_task_5",
+            "suite": "slack",
+            "user_task": "user_task_19"
+          }
+        },
+        {
+          "completion_index": 28,
+          "env": {
+            "AI_CHAIN_ID": "slack-u20-i2-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "53208c615868a0fb53857aef2f95d31eb79f970bec995d6ad034d23c4015fcd2",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-slack-u20-i2-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_2",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/slack-u20-i2-chain-001/stage-b/slack-u20-i2-chain-001-stage-b-v1",
+            "AI_RUN_ID": "slack-u20-i2-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i2-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "65",
+            "AI_SOURCE_SHA256": "d5c0cbdc41949afd399fac125e1d5b9ed39527ced332e1255bfa4b1a86fce186",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "65",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i2-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "4f676da0d230457c98e3fa6e171d11e4d46e0c506019ccf0fd3332e73b462eb9",
+            "AI_SOURCE_STATE_SIZE": "1551",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/slack-u20-i2-chain-001--stage-B--slack-u20-i2-chain-001-stage-b-v1.json",
+            "AI_SUITE": "slack",
+            "AI_USER_TASK": "user_task_20"
+          },
+          "pair": {
+            "injection_task": "injection_task_2",
+            "suite": "slack",
+            "user_task": "user_task_20"
+          }
+        },
+        {
+          "completion_index": 29,
+          "env": {
+            "AI_CHAIN_ID": "slack-u20-i3-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "7dc862560e1dcb9f4afbf0627ea079c848253fb79d46e79b43e708d5c0a03902",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-slack-u20-i3-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_3",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/slack-u20-i3-chain-001/stage-b/slack-u20-i3-chain-001-stage-b-v1",
+            "AI_RUN_ID": "slack-u20-i3-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i3-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "65",
+            "AI_SOURCE_SHA256": "853361be37539f84c671b3052f3271a83d916ae3cbb6df2d582a8a1d20054833",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "65",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i3-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "ed87328600df1d149afbfedc4be22639c411afa3ca477343055b39e1841a266e",
+            "AI_SOURCE_STATE_SIZE": "1501",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/slack-u20-i3-chain-001--stage-B--slack-u20-i3-chain-001-stage-b-v1.json",
+            "AI_SUITE": "slack",
+            "AI_USER_TASK": "user_task_20"
+          },
+          "pair": {
+            "injection_task": "injection_task_3",
+            "suite": "slack",
+            "user_task": "user_task_20"
+          }
+        },
+        {
+          "completion_index": 30,
+          "env": {
+            "AI_CHAIN_ID": "slack-u20-i4-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "c1b9ccb4a1b6df2724e1e7f695f34364447d3bc435fc91366e9639308d1e0162",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-slack-u20-i4-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_4",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/slack-u20-i4-chain-001/stage-b/slack-u20-i4-chain-001-stage-b-v1",
+            "AI_RUN_ID": "slack-u20-i4-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i4-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "70b0439b34124cb3ac68c9963c4da6498cb011bf42391bb23739c84d0b806e60",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i4-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "184ce4a6cbcdf15b4c804aad62e416ffd7c38830b1aa063c44e7ad3554c89cf5",
+            "AI_SOURCE_STATE_SIZE": "2772",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/slack-u20-i4-chain-001--stage-B--slack-u20-i4-chain-001-stage-b-v1.json",
+            "AI_SUITE": "slack",
+            "AI_USER_TASK": "user_task_20"
+          },
+          "pair": {
+            "injection_task": "injection_task_4",
+            "suite": "slack",
+            "user_task": "user_task_20"
+          }
+        },
+        {
+          "completion_index": 31,
+          "env": {
+            "AI_CHAIN_ID": "slack-u20-i5-chain-001",
+            "AI_CONFIGURATION_FINGERPRINT": "8ebe7dae1d6f5632549ae9809c039e35d85cbe02bff8af7533a137c29e5ccdf6",
+            "AI_EXPERIMENT_ID": "meta-secalign-qwen3-small-policy-warm-slack-u20-i5-stage-b-v1",
+            "AI_INJECTION_TASK": "injection_task_5",
+            "AI_RESULT_ROOT": "/workspace/results/autoinject-qwen3-small/continuations/v1/chains/slack-u20-i5-chain-001/stage-b/slack-u20-i5-chain-001-stage-b-v1",
+            "AI_RUN_ID": "slack-u20-i5-chain-001-stage-b-v1",
+            "AI_SOURCE_CHECKPOINT": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i5-attempt-02/run/checkpoint.pt",
+            "AI_SOURCE_CUMULATIVE": "260",
+            "AI_SOURCE_SHA256": "16623c86cf403a04c41cbd479adcb0907928a73165698f0396ffc1f1a9dcfc78",
+            "AI_SOURCE_SIZE": "3087560784",
+            "AI_SOURCE_STAGE": "A",
+            "AI_SOURCE_STAGE_QUERIES": "260",
+            "AI_SOURCE_STATE": "/workspace/results/autoinject-qwen3-small/l40-cold-baseline-v1/indexed-remaining-31-attempt-02/slack-u20-i5-attempt-02/run/checkpoint_state.json",
+            "AI_SOURCE_STATE_SHA256": "a755c0d8d21b53b08b5debc6e19f733bfc49abaaed6e34178efda310e89e425d",
+            "AI_SOURCE_STATE_SIZE": "2712",
+            "AI_STAGE": "B",
+            "AI_STAGE_RECORD": "/workspace/results/autoinject-qwen3-small/continuations/v1/records/stages/slack-u20-i5-chain-001--stage-B--slack-u20-i5-chain-001-stage-b-v1.json",
+            "AI_SUITE": "slack",
+            "AI_USER_TASK": "user_task_20"
+          },
+          "pair": {
+            "injection_task": "injection_task_5",
+            "suite": "slack",
+            "user_task": "user_task_20"
+          }
+        }
+      ]
+    }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autoinject-stage-b-v1
+  namespace: ucr-rai-chazz
+  labels:
+    app.kubernetes.io/name: autoinject-qwen3-small
+    autoinject-run-kind: continuation-stage-b-v1
+    autoinject-stage: b
+    autoinject-suite: multi
+  annotations:
+    autoinject.ucr.edu/code-commit: 66f4e040e891926bd493b5466d501d11b3f7fa96
+    autoinject.ucr.edu/task-map-sha256: 4827a5805dd8a3ebb3848ad312b02cd3a91ed42f870188087269a2db7c9c839e
+    autoinject.ucr.edu/job-inventory-payload-sha256: 8460f416573f29cc581768998390a181f1bd532a2b254b4040161049aa7357b0
+spec:
+  completions: 32
+  parallelism: 8
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autoinject-qwen3-small
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-L40
+                - NVIDIA-L40S
+      initContainers:
+      - name: checkout-code
+        image: alpine/git:v2.47.2
+        command:
+        - /bin/sh
+        - -ec
+        args:
+        - |
+          set -euxo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          BRANCH=experiment/stage-b-policy-warm-start
+          COMMIT=66f4e040e891926bd493b5466d501d11b3f7fa96
+          REPO=/work/AutoInject
+          test ! -e "${REPO}"
+          mkdir -p "${REPO}"
+          git -C "${REPO}" init
+          git -C "${REPO}" remote add origin https://github.com/czcarrizales/AutoInject.git
+          timeout 300 git -C "${REPO}" fetch --no-tags origin "refs/heads/${BRANCH}"
+          git -C "${REPO}" merge-base --is-ancestor "${COMMIT}" FETCH_HEAD
+          git -C "${REPO}" checkout --detach "${COMMIT}"
+          test "$(git -C "${REPO}" rev-parse HEAD)" = "${COMMIT}"
+          test -z "$(git -C "${REPO}" status --porcelain)"
+          printf '%s\n' "${COMMIT}" > /work/validated-code-commit
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        volumeMounts:
+        - name: work
+          mountPath: /work
+      containers:
+      - name: stage-b
+        image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+        imagePullPolicy: IfNotPresent
+        command:
+        - bash
+        - -lc
+        args:
+        - |
+          set -Eeuo pipefail
+          PYTHON=/opt/conda/bin/python
+          TASK_MAP="/indexed/tasks.json"
+          TASK_MAP_SHA256="4827a5805dd8a3ebb3848ad312b02cd3a91ed42f870188087269a2db7c9c839e"
+          test "$(sha256sum "${TASK_MAP}" | awk '{print $1}')" = "${TASK_MAP_SHA256}"
+          : "${JOB_COMPLETION_INDEX:?missing JOB_COMPLETION_INDEX}"
+          TASK_EXPORTS="$("${PYTHON}" - "${TASK_MAP}" "${JOB_COMPLETION_INDEX}" <<'PY'
+          import json
+          import re
+          import shlex
+          import sys
+
+          expected = set(('AI_SOURCE_CHECKPOINT', 'AI_SOURCE_STATE', 'AI_SOURCE_SHA256', 'AI_SOURCE_SIZE', 'AI_SOURCE_STATE_SHA256', 'AI_SOURCE_STATE_SIZE', 'AI_SOURCE_STAGE_QUERIES', 'AI_SOURCE_CUMULATIVE', 'AI_CHAIN_ID', 'AI_RUN_ID', 'AI_RESULT_ROOT', 'AI_STAGE_RECORD', 'AI_STAGE', 'AI_SOURCE_STAGE', 'AI_EXPERIMENT_ID', 'AI_SUITE', 'AI_USER_TASK', 'AI_INJECTION_TASK', 'AI_CONFIGURATION_FINGERPRINT'))
+          raw_index = sys.argv[2]
+          if re.fullmatch(r"(0|[1-9][0-9]*)", raw_index) is None:
+              raise SystemExit("invalid JOB_COMPLETION_INDEX")
+          index = int(raw_index)
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              document = json.load(handle)
+          if document.get("schema_version") != 1:
+              raise SystemExit("invalid indexed task schema")
+          tasks = document.get("tasks")
+          if (
+              document.get("task_count") != 32
+              or not isinstance(tasks, list)
+              or len(tasks) != 32
+          ):
+              raise SystemExit("invalid indexed task count")
+          if not 0 <= index < len(tasks):
+              raise SystemExit("JOB_COMPLETION_INDEX out of range")
+          task = tasks[index]
+          if (
+              not isinstance(task, dict)
+              or set(task) != {"completion_index", "pair", "env"}
+              or task.get("completion_index") != index
+          ):
+              raise SystemExit("indexed task record mismatch")
+          env = task.get("env")
+          if not isinstance(env, dict) or set(env) != expected:
+              raise SystemExit("indexed task environment mismatch")
+          for name in sorted(expected):
+              value = env[name]
+              if not isinstance(value, str) or "\x00" in value:
+                  raise SystemExit(f"invalid indexed task value: {name}")
+              print(f"export {name}={shlex.quote(value)}")
+          PY
+          )"
+          eval "${TASK_EXPORTS}"
+          REPO=/work/AutoInject
+          CODE_COMMIT=66f4e040e891926bd493b5466d501d11b3f7fa96
+          SOURCE_CHECKPOINT="${AI_SOURCE_CHECKPOINT}"
+          SOURCE_STATE="${AI_SOURCE_STATE}"
+          SOURCE_SHA256="${AI_SOURCE_SHA256}"
+                    SOURCE_SIZE="${AI_SOURCE_SIZE}"
+                    SOURCE_STATE_SHA256="${AI_SOURCE_STATE_SHA256}"
+                    SOURCE_STATE_SIZE="${AI_SOURCE_STATE_SIZE}"
+          RECORDS_ROOT=/workspace/results/autoinject-qwen3-small/continuations/v1
+          CONSTRAINTS=/runtime/continuation-runtime.txt
+          CHAIN_ID="${AI_CHAIN_ID}"
+          RUN_ID="${AI_RUN_ID}"
+          RESULT_ROOT="${AI_RESULT_ROOT}"
+          RUN_DIR=${RESULT_ROOT}/run
+          STAGE_RECORD="${AI_STAGE_RECORD}"
+          test "$(cat /work/validated-code-commit)" = "${CODE_COMMIT}"
+          test -f "${SOURCE_CHECKPOINT}"
+          test -f "${SOURCE_STATE}"
+          test "$(stat -c %s "${SOURCE_CHECKPOINT}")" = "${SOURCE_SIZE}"
+                    test "$(sha256sum "${SOURCE_CHECKPOINT}" | awk '{print $1}')" = "${SOURCE_SHA256}"
+                    test "$(stat -c %s "${SOURCE_STATE}")" = "${SOURCE_STATE_SIZE}"
+                    test "$(sha256sum "${SOURCE_STATE}" | awk '{print $1}')" = "${SOURCE_STATE_SHA256}"
+          "${PYTHON}" -c 'import json,sys; state=json.load(open(sys.argv[1])); assert state["learner_state"]["queries_used"] == int(sys.argv[2])' "${SOURCE_STATE}" "${AI_SOURCE_STAGE_QUERIES}"
+          test ! -e "${RESULT_ROOT}"
+          test ! -e "${STAGE_RECORD}"
+          mkdir -p /work/home /work/tmp /work/pip-cache
+          test "$(sha256sum "${CONSTRAINTS}" | awk '{print $1}')" = 94c521b60ee9623960c472c2c740ae8eab2cdf49254723b58b308a7c60487345
+          "${PYTHON}" -m pip install --constraint "${CONSTRAINTS}" --editable "${REPO}/agentdojo"
+          "${PYTHON}" -m pip install --constraint "${CONSTRAINTS}" --editable "${REPO}"
+          export PYTHONPATH=${REPO}/src:${REPO}/agentdojo/src
+          "${PYTHON}" - <<'PY'
+          import accelerate, numpy, openai, peft, torch, transformers, trl
+          assert torch.__version__ == "2.5.1+cu124"
+          assert transformers.__version__ == "4.57.0"
+          assert trl.__version__ == "0.24.0"
+          assert accelerate.__version__ == "1.14.0"
+          assert peft.__version__ == "0.20.0"
+          assert numpy.__version__ == "2.1.2"
+          assert openai.__version__ == "2.53.0"
+          PY
+          TRL_FILE="$("${PYTHON}" -c 'import trl.trainer.grpo_trainer as m; print(m.__file__)')"
+          test "$(sha256sum "${TRL_FILE}" | awk '{print $1}')" = bb6905182acf2ec426f1dc9ffc37e5210d58ee47d2764f7cf12dbb90a4a28954
+          "${PYTHON}" - "${TRL_FILE}" <<'PY'
+          import sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          old_signature = '''        peft_config: Optional["PeftConfig"] = None,\n    ):\n'''
+          new_signature = '''        peft_config: Optional["PeftConfig"] = None,\n        ref_model: Optional[PreTrainedModel] = None,\n    ):\n'''
+          old_reference = '''        else:\n            # For deepspeed, fsdp or non-distributed models, create a reference model from scratch\n            config = AutoConfig.from_pretrained(model_id)\n            architecture = getattr(transformers, config.architectures[0])\n            self.ref_model = architecture.from_pretrained(model_id, **model_init_kwargs)\n'''
+          new_reference = '''        else:\n            if ref_model is not None:\n                self.ref_model = ref_model\n            else:\n                # For deepspeed, fsdp or non-distributed models, create a reference model from scratch\n                config = AutoConfig.from_pretrained(model_id)\n                architecture = getattr(transformers, config.architectures[0])\n                self.ref_model = architecture.from_pretrained(model_id, **model_init_kwargs)\n'''
+          assert text.count(old_signature) == 1
+          assert text.count(old_reference) == 1
+          text = text.replace(old_signature, new_signature).replace(old_reference, new_reference)
+          path.write_text(text, encoding="utf-8")
+          PY
+          test "$(sha256sum "${TRL_FILE}" | awk '{print $1}')" = 41aa37447a07da8962b80f599d3f7d75528818b9b25072ce0f39d043f596d725
+          mkdir -p "$(dirname "${RESULT_ROOT}")" "$(dirname "${STAGE_RECORD}")"
+          mkdir "${RESULT_ROOT}" "${RUN_DIR}"
+          cd "${RUN_DIR}"
+          set +e
+          "${PYTHON}" -u -m rlpi.agentdojo.adaptive_agentdojo \
+            exp_ident="${AI_EXPERIMENT_ID}" \
+            model=facebook/Meta-SecAlign-8B victim_device=cuda:0 \
+            learner=trl_suffix_meta_secalign_repro \
+            learner.attack_model_name=Qwen/Qwen2-1.5B learner.device=cuda:0 \
+            +learner.feedback_model=qwen3-small \
+            learner.feedback_fallback_model=gpt-4o-mini-2024-07-18 \
+            learner.max_suffix_length=30 learner.temperature=0.9 learner.top_p=0.95 \
+            learner.min_experiences_for_training=1 \
+            learner.grpo_num_generations=8 learner.grpo_num_iterations=5 \
+            learner.grpo_learning_rate=1.0e-5 \
+            learner.grpo_per_device_train_batch_size=2 \
+            learner.grpo_gradient_accumulation_steps=2 learner.grpo_warmup_steps=4 \
+            learner.grpo_max_grad_norm=0.1 learner.grpo_beta=1.0 \
+            learner.grpo_adam_epsilon=1.0e-5 learner.grpo_adam_beta2=0.98 \
+            learner.grpo_eval_num_generalization_tasks=0 \
+            learner.gpt_enabled=true learner.gpt_sparse_threshold=0.1 \
+            learner.gpt_medium_threshold=0.3 learner.gpt_dense_threshold=0.5 \
+            learner.gpt_sparse_weight=0.8 learner.gpt_medium_weight=0.5 \
+            learner.gpt_transition_weight=0.3 learner.gpt_dense_weight=0.1 \
+            learner.gpt_max_retries=3 learner.gpt_retry_delay=1.0 learner.verbose=true \
+            model_id=null attack=direct defense=null system_message=null \
+            force_rerun=false max_tokens=null 'modules_to_load=[]' \
+            suite="${AI_SUITE}" "user_tasks=[${AI_USER_TASK}]" "injection_tasks=[${AI_INJECTION_TASK}]" \
+            seed=1 learner.seed=42 query_budget=260 \
+            initialization_mode=policy_warm reference_mode=source \
+            source_checkpoint_path="${SOURCE_CHECKPOINT}" source_checkpoint_sha256="${SOURCE_SHA256}" \
+            source_checkpoint_size_bytes="${SOURCE_SIZE}" source_stage_queries_used="${AI_SOURCE_STAGE_QUERIES}" \
+            source_checkpoint_state_path="${SOURCE_STATE}" source_checkpoint_state_sha256="${SOURCE_STATE_SHA256}" \
+            source_checkpoint_state_size_bytes="${SOURCE_STATE_SIZE}" \
+            continuation_records_root="${RECORDS_ROOT}" result_root="${RESULT_ROOT}" \
+            stage_record_path="${STAGE_RECORD}" configuration_fingerprint="${AI_CONFIGURATION_FINGERPRINT}" \
+            chain_id="${CHAIN_ID}" stage="${AI_STAGE}" run_id="${RUN_ID}" source_stage="${AI_SOURCE_STAGE}" \
+            source_cumulative_queries_used="${AI_SOURCE_CUMULATIVE}" git_commit="${CODE_COMMIT}" \
+            "hydra.run.dir=${RUN_DIR}" hydra.job.chdir=false \
+            2>&1 | tee "${RUN_DIR}/stdout.log"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          test "${#pipeline_status[@]}" -eq 2
+          test "${pipeline_status[0]}" -eq 0
+          test "${pipeline_status[1]}" -eq 0
+          test -s "${RUN_DIR}/checkpoint.pt"
+          test -s "${RUN_DIR}/checkpoint_state.json"
+          test -s "${RUN_DIR}/grpo_training_outputs/experience_history.jsonl"
+          test -s "${RUN_DIR}/grpo_training_outputs/grpo_evaluations.jsonl"
+          "${PYTHON}" - "${RUN_DIR}/checkpoint.pt" "${RUN_DIR}/checkpoint_state.json" <<'PY'
+          import json
+          import sys
+          import torch
+          checkpoint = torch.load(sys.argv[1], map_location="cpu", weights_only=True, mmap=True)
+          assert isinstance(checkpoint, dict)
+          assert isinstance(checkpoint.get("policy_state_dict"), dict) and checkpoint["policy_state_dict"]
+          assert all(torch.is_tensor(value) for value in checkpoint["policy_state_dict"].values())
+          assert isinstance(checkpoint.get("model_config"), dict)
+          with open(sys.argv[2], encoding="utf-8") as handle:
+              state = json.load(handle)
+          assert isinstance(state, dict)
+          assert isinstance(state.get("learner_state"), dict)
+          queries = state["learner_state"].get("queries_used")
+          assert isinstance(queries, int) and not isinstance(queries, bool) and 0 <= queries <= 260
+          assert isinstance(state.get("experiment_reporting"), dict)
+          assert isinstance(state.get("continuation"), dict)
+          PY
+          test -s "${RUN_DIR}/stage-publication-request.json"
+          test -s "${RUN_DIR}/stdout.log"
+          test ! -e "${STAGE_RECORD}"
+          exec "${PYTHON}" -m rlpi.agentdojo.continuation_reporting \
+            --publish-request "${RUN_DIR}/stage-publication-request.json" \
+            --stdout-log "${RUN_DIR}/stdout.log"
+        env:
+        - name: ACCELERATE_TORCH_DEVICE
+          value: cuda:0
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nrp-llm-token
+              key: NRP_LLM_TOKEN
+        - name: OPENAI_BASE_URL
+          value: https://ellm.nrp-nautilus.io/v1
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+        - name: HOME
+          value: /work/home
+        - name: TMPDIR
+          value: /work/tmp
+        - name: HF_HUB_CACHE
+          value: /model-cache
+        - name: HF_HUB_OFFLINE
+          value: '1'
+        - name: TRANSFORMERS_OFFLINE
+          value: '1'
+        - name: PIP_CACHE_DIR
+          value: /workspace/pip-cache
+        - name: JOB_COMPLETION_INDEX
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+        resources:
+          requests:
+            cpu: '2'
+            memory: 24Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: '2'
+            memory: 24Gi
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace/results
+          subPath: results
+        - name: workspace
+          mountPath: /workspace/pip-cache
+          subPath: pip-cache
+        - name: workspace
+          mountPath: /model-cache
+          subPath: hf-cache
+          readOnly: true
+        - name: work
+          mountPath: /work
+        - name: runtime
+          mountPath: /runtime
+          readOnly: true
+        - name: indexed-task-map
+          mountPath: /indexed
+          readOnly: true
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: ucr-summer-workspace
+      - name: work
+        emptyDir:
+          sizeLimit: 64Gi
+      - name: runtime
+        configMap:
+          name: autoinject-continuation-runtime-v1
+      - name: indexed-task-map
+        configMap:
+          name: autoinject-stage-b-v1-tasks-4827a5805dd8
+      activeDeadlineSeconds: 252000
+  completionMode: Indexed
+  backoffLimitPerIndex: 0
+  maxFailedIndexes: 32
